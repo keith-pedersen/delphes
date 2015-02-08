@@ -451,6 +451,13 @@ public:
   Int_t Charge;
 
   Float_t Mass;
+  
+  // <KDP>
+  // 3 new fields for use by AllParticlePropagator
+  Float_t CTau; // Particle actual (not average) proper lifetime (in mm)
+  Float_t CreationRadius; 
+  Float_t TrackLength; // Also a flag! When negative, partice not propagated yet.
+  static const Double_t TrackLength_UnprocessedFlag;
 
   Int_t IsPU;
   Int_t IsConstituent;

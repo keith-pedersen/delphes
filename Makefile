@@ -335,6 +335,7 @@ tmp/modules/ModulesDict.$(SrcSuf): \
 	modules/Cloner.h \
 	modules/Weighter.h \
 	modules/Hector.h \
+	modules/AllParticlePropagator.h \
 	modules/ExampleModule.h
 ModulesDict$(PcmSuf): \
 	tmp/modules/ModulesDict$(PcmSuf) \
@@ -611,6 +612,11 @@ tmp/modules/ExampleModule.$(ObjSuf): \
 	external/ExRootAnalysis/ExRootResult.h \
 	external/ExRootAnalysis/ExRootFilter.h \
 	external/ExRootAnalysis/ExRootClassifier.h
+tmp/modules/AllParticlePropagator.$(ObjSuf): \
+	modules/AllParticlePropagator.$(SrcSuf) \
+	modules/AllParticlePropagator.h \
+	classes/DelphesClasses.h \
+	classes/DelphesFactory.h
 tmp/modules/Hector.$(ObjSuf): \
 	modules/Hector.$(SrcSuf) \
 	modules/Hector.h \
@@ -870,6 +876,7 @@ DELPHES_OBJ +=  \
 	tmp/modules/EnergyScale.$(ObjSuf) \
 	tmp/modules/EnergySmearing.$(ObjSuf) \
 	tmp/modules/ExampleModule.$(ObjSuf) \
+	tmp/modules/AllParticlePropagator.$(ObjSuf) \
 	tmp/modules/Hector.$(ObjSuf) \
 	tmp/modules/IdentificationMap.$(ObjSuf) \
 	tmp/modules/ImpactParameterSmearing.$(ObjSuf) \
@@ -1516,6 +1523,10 @@ modules/IdentificationMap.h: \
 	@touch $@
 
 modules/ExampleModule.h: \
+	classes/DelphesModule.h
+	@touch $@
+	
+modules/AllParticlePropagator.h: \
 	classes/DelphesModule.h
 	@touch $@
 

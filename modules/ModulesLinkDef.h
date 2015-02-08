@@ -58,6 +58,9 @@
 #include "modules/Hector.h"
 #include "modules/ExampleModule.h"
 
+//KDP modules
+#include "modules/AllParticlePropagator.h"
+
 #ifdef __CINT__
 
 #pragma link off all globals;
@@ -96,5 +99,8 @@
 #pragma link C++ class Weighter+;
 #pragma link C++ class Hector+;
 #pragma link C++ class ExampleModule+;
+
+//KDP modules
+#pragma link C++ clas AllParticlePropagator+;
 
 #endif
