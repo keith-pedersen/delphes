@@ -81,6 +81,9 @@ void MomentumSmearing::Init()
   // create output array
 
   fOutputArray = ExportArray(GetString("OutputArray", "stableParticles"));
+  
+  // KDP - Read in the mass hypothesis to be used for the particle (default to massless)
+  fMassHypothesis = GetDouble("MassHypothesis", 0.0);
 }
 
 //------------------------------------------------------------------------------
@@ -115,7 +118,7 @@ void MomentumSmearing::Process()
     candidate = static_cast<Candidate*>(candidate->Clone());
     eta = candidateMomentum.Eta();
     phi = candidateMomentum.Phi();
-    candidate->Momentum.SetPtEtaPhiE(pt, eta, phi, pt*TMath::CosH(eta));
+    candidate->Momentum.SetPtEtaPhiM(pt, eta, phi, fMassHypothesis);
     candidate->AddCandidate(mother);
         
     fOutputArray->Add(candidate);
