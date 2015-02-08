@@ -335,6 +335,8 @@ tmp/modules/ModulesDict.$(SrcSuf): \
 	modules/Cloner.h \
 	modules/Weighter.h \
 	modules/Hector.h \
+	modules/PropagatorAndPixelTracker.h \
+	modules/PixelPicture.h \
 	modules/AllParticlePropagator.h \
 	modules/ExampleModule.h
 ModulesDict$(PcmSuf): \
@@ -612,6 +614,16 @@ tmp/modules/ExampleModule.$(ObjSuf): \
 	external/ExRootAnalysis/ExRootResult.h \
 	external/ExRootAnalysis/ExRootFilter.h \
 	external/ExRootAnalysis/ExRootClassifier.h
+tmp/modules/PropagatorAndPixelTracker.$(ObjSuf): \
+	modules/PropagatorAndPixelTracker.$(SrcSuf) \
+	modules/PropagatorAndPixelTracker.h \
+	classes/DelphesClasses.h \
+	classes/DelphesFactory.h
+tmp/modules/PixelPicture.$(ObjSuf): \
+	modules/PixelPicture.$(SrcSuf) \
+	modules/PixelPicture.h \
+	classes/DelphesClasses.h \
+	classes/DelphesFactory.h
 tmp/modules/AllParticlePropagator.$(ObjSuf): \
 	modules/AllParticlePropagator.$(SrcSuf) \
 	modules/AllParticlePropagator.h \
@@ -876,6 +888,8 @@ DELPHES_OBJ +=  \
 	tmp/modules/EnergyScale.$(ObjSuf) \
 	tmp/modules/EnergySmearing.$(ObjSuf) \
 	tmp/modules/ExampleModule.$(ObjSuf) \
+	tmp/modules/PropagatorAndPixelTracker.$(ObjSuf) \
+	tmp/modules/PixelPicture.$(ObjSuf) \
 	tmp/modules/AllParticlePropagator.$(ObjSuf) \
 	tmp/modules/Hector.$(ObjSuf) \
 	tmp/modules/IdentificationMap.$(ObjSuf) \
@@ -1523,6 +1537,14 @@ modules/IdentificationMap.h: \
 	@touch $@
 
 modules/ExampleModule.h: \
+	classes/DelphesModule.h
+	@touch $@
+	
+modules/PropagatorAndPixelTracker.h: \
+	classes/DelphesModule.h
+	@touch $@
+	
+modules/PixelPicture.h: \
 	classes/DelphesModule.h
 	@touch $@
 	

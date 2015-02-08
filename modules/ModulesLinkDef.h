@@ -60,6 +60,8 @@
 
 //KDP modules
 #include "modules/AllParticlePropagator.h"
+#include "modules/PropagatorAndPixelTracker.h"
+#include "modules/PixelPicture.h"
 
 #ifdef __CINT__
 
@@ -102,5 +104,7 @@
 
 //KDP modules
 #pragma link C++ clas AllParticlePropagator+;
+#pragma link C++ clas PropagatorAndPixelTracker+;
+#pragma link C++ clas PixelPicture+;
 
 #endif
