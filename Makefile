@@ -9,12 +9,17 @@
 
 include doc/Makefile.arch
 
+#KDP locally defined CPU optimization
+include ~/MonteCarlo/Workshop/Makefile_inc/Makefile.march
+
 ROOT_MAJOR := $(shell $(RC) --version | cut -d'.' -f1)
 
 SrcSuf = cc
 PcmSuf = _rdict.pcm
 
-CXXFLAGS += $(ROOTCFLAGS) -Wno-write-strings -D_FILE_OFFSET_BITS=64 -DDROP_CGAL -I. -Iexternal -Iexternal/tcl
+#KDP add flags for CPU optimization, C++11 support, and debugging/profiling
+#CXXFLAGS += $(ROOTCFLAGS) -Wno-write-strings -D_FILE_OFFSET_BITS=64 -DDROP_CGAL -I. -Iexternal -Iexternal/tcl
+CXXFLAGS += $(ROOTCFLAGS) -Wno-write-strings -D_FILE_OFFSET_BITS=64 -DDROP_CGAL -I. -Iexternal -Iexternal/tcl -march=$(MARCH) -std=c++0x -g
 DELPHES_LIBS = $(shell $(RC) --libs) -lEG $(SYSLIBS)
 DISPLAY_LIBS = $(shell $(RC) --evelibs) -lGuiHtml  $(SYSLIBS)
 
@@ -37,11 +42,16 @@ CXXFLAGS += -I$(PROMC)/include -I$(PROMC)/src
 OPT_LIBS += -L$(PROMC)/lib -lpromc -lprotoc -lprotobuf -lprotobuf-lite -lcbook -lz
 endif
 
+#KDP Activate Pythia 8
+PYTHIA8 = ~/MonteCarlo/Pythia
+
 ifneq ($(PYTHIA8),)
 #HAS_PYTHIA8 = true
-CXXFLAGS += -I$(PYTHIA8)/include
-CXXFLAGS += -I$(PYTHIA8)/include/Pythia8
-OPT_LIBS += -L$(PYTHIA8)/lib -lpythia8 -ldl
+#KDP Add space after -I/-L to convert ~ in $(PYTHIA8) to home directory
+CXXFLAGS += -I $(PYTHIA8)/include
+CXXFLAGS += -I $(PYTHIA8)/include/Pythia8
+OPT_LIBS += -L $(PYTHIA8)/lib -lpythia8 -ldl
+#OPT_LIBS += -L $(PYTHIA8)/lib -lpythia8 -ldl -lboost_iostreams
 endif
 
 DELPHES_LIBS += $(OPT_LIBS)
