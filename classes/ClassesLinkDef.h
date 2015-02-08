@@ -24,6 +24,8 @@
  *  \author P. Demin - UCL, Louvain-la-Neuve
  *
  */
+ 
+//KDP  (Event -> TimedEvent) to prevent confusion with Pythia8::Event
 
 #include "classes/DelphesModule.h"
 #include "classes/DelphesFactory.h"
@@ -42,7 +44,7 @@
 
 #pragma link C++ class SortableObject+;
 
-#pragma link C++ class Event+;
+#pragma link C++ class TimedEvent+;
 #pragma link C++ class LHCOEvent+;
 #pragma link C++ class LHEFEvent+;
 #pragma link C++ class HepMCEvent+;

@@ -31,6 +31,8 @@
 
 // Dependencies (#includes)
 
+//KDP  (Event -> TimedEvent) to prevent confusion with Pythia8::Event
+
 #include "TRef.h"
 #include "TObject.h"
 #include "TRefArray.h"
@@ -42,7 +44,7 @@ class DelphesFactory;
 
 //---------------------------------------------------------------------------
 
-class Event: public TObject
+class TimedEvent: public TObject
 {
 public:
 
@@ -51,12 +53,12 @@ public:
   Float_t ReadTime;
   Float_t ProcTime;
 
-  ClassDef(Event, 1)
+  ClassDef(TimedEvent, 1)
 };
 
 //---------------------------------------------------------------------------
 
-class LHCOEvent: public Event
+class LHCOEvent: public TimedEvent
 {
 public:
 
@@ -67,7 +69,7 @@ public:
 
 //---------------------------------------------------------------------------
 
-class LHEFEvent: public Event
+class LHEFEvent: public TimedEvent
 {
 public:
 
@@ -83,7 +85,7 @@ public:
 
 //---------------------------------------------------------------------------
 
-class HepMCEvent: public Event
+class HepMCEvent: public TimedEvent
 {
 public:
 
