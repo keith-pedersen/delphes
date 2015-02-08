@@ -28,6 +28,9 @@
  *
  */
 
+// KDP - modified to include a runName
+// All modules have access to the DelphesFactory; a runName allows every module to create
+// files other than the final root file, with a name specific to each run
 #include "TNamed.h"
 
 #include <map>
@@ -42,7 +45,7 @@ class DelphesFactory: public TNamed
 {
 public:
   
-  DelphesFactory(const char *name = "ObjectFactory");
+  DelphesFactory(const char *name = "ObjectFactory", const char *runName_in = "DefaultName");
   ~DelphesFactory();
 
   void Clear();
@@ -57,6 +60,8 @@ public:
 
   template<typename T>
   T *New() { return static_cast<T *>(New(T::Class())); }
+  
+  const char * const runName;
 
 private:
 

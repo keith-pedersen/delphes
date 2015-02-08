@@ -28,6 +28,10 @@
  *
  */
 
+// KDP - modified to pass runName to DelphesFactory
+// All modules have access to the DelphesFactory; a runName allows every module to create
+// files other than the final root file, with a name specific to each run
+
 #include "classes/DelphesModule.h"
 
 class TFolder;
@@ -41,7 +45,7 @@ class Delphes: public DelphesModule
 {
 public:
 
-  Delphes(const char *name = "Delphes");
+  Delphes(const char *name = "Delphes", const char* runName_in = "DefaultName");
   ~Delphes();
 
   void SetTreeWriter(ExRootTreeWriter *treeWriter);

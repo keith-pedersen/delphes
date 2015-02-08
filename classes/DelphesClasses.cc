@@ -116,9 +116,16 @@ TLorentzVector Tower::P4()
 
 //------------------------------------------------------------------------------
 
+// The field TrackLength is used as a flag for AllParticlePropagator to 
+// indicate which particles have been processed (if TrackLength < 0, the 
+// particle hasn't been processed yet). Thus, TrackLength should
+// be initialized to TrackLength_UnprocessedFlag
+const Double_t Candidate::TrackLength_UnprocessedFlag = -1.;
+
 Candidate::Candidate() :
   PID(0), Status(0), M1(-1), M2(-1), D1(-1), D2(-1),
   Charge(0), Mass(0.0),
+  CTau(0.0), CreationRadius(0.0), TrackLength(TrackLength_UnprocessedFlag),
   IsPU(0), IsConstituent(0),
   BTag(0), TauTag(0), Eem(0.0), Ehad(0.0),
   DeltaEta(0.0), DeltaPhi(0.0),
@@ -221,6 +228,9 @@ void Candidate::Copy(TObject &obj) const
   object.D2 = D2;
   object.Charge = Charge;
   object.Mass = Mass;
+  object.CTau = CTau;
+  object.CreationRadius = CreationRadius;
+  object.TrackLength = TrackLength;
   object.IsPU = IsPU;
   object.IsConstituent = IsConstituent;
   object.BTag = BTag;
@@ -284,6 +294,9 @@ void Candidate::Clear(Option_t* option)
   M1 = -1; M2 = -1; D1 = -1; D2 = -1;
   Charge = 0;
   Mass = 0.0;
+  CTau = 0.0;
+  CreationRadius = 0.0;
+  TrackLength = TrackLength_UnprocessedFlag;
   IsPU = 0;
   IsConstituent = 0;
   BTag = 0;

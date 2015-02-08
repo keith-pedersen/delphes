@@ -199,9 +199,9 @@ void LHCOWriter::Write()
 
 void LHCOWriter::AnalyseEvent()
 {
-  Event *element;
+  TimedEvent *element;
 
-  element = static_cast<Event*>(fBranchEvent->At(0));
+  element = static_cast<TimedEvent*>(fBranchEvent->At(0));
 
   fprintf(fOutputFile, "%4d %13lld %8d\n", 0, element->Number, 0);
 

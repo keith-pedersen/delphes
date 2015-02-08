@@ -27,6 +27,8 @@
  *
  */
 
+// KDP - Added a mass hypothesis, for slightly more accurate jet masses
+
 #include "classes/DelphesModule.h"
 
 class TIterator;
@@ -45,6 +47,8 @@ public:
   void Finish();
 
 private:
+
+  Double_t fMassHypothesis;
 
   DelphesFormula *fFormula; //!
 
