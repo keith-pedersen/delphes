@@ -6,6 +6,7 @@
 //#include "TLorentzVector.h"
 #include "Pythia8/Pythia.h"
 #include <cmath>
+
 #include "PropagatorAndPixelTracker.h"
 
 const Double_t c_light = 299792458.; // [m/s]
@@ -19,7 +20,7 @@ const Double_t CM_to_mm = 1E1;
 const Double_t microns_to_MM = 1E-3;
 const Double_t DEG_to_rad = 2*PI/360.;
 
-// This code eschews TMath, as its safety checks are not needed
+// This code deliberately eschews TMath
 
 PropagatorAndPixelTracker::PropagatorAndPixelTracker():
 	fRadius(0.), fRadius2(0.), fHalfLength(0.), 	fBz(0.), fMinTrackLength(0.), 
@@ -27,6 +28,8 @@ PropagatorAndPixelTracker::PropagatorAndPixelTracker():
 	fOutputArray(0), fChargedHadronOutputArray(0), fElectronOutputArray(0), 
 	fMuonOutputArray(0), fBarrelLayers(0), fItBarrel(0), fEndcapLayers(0), fItEndcap(0) {}
 PropagatorAndPixelTracker::~PropagatorAndPixelTracker() {}
+
+//------------------------------------------------------------------------------
 
 void PropagatorAndPixelTracker::Init()
 {
@@ -143,6 +146,8 @@ void PropagatorAndPixelTracker::Init()
 	}
 }
 
+//------------------------------------------------------------------------------
+
 TObjArray* PropagatorAndPixelTracker::NewPixelArray(const char* name)
 {
 	TObjArray* newArray = static_cast<TObjArray *>(fPixelArrays->NewEntry());
@@ -151,6 +156,8 @@ TObjArray* PropagatorAndPixelTracker::NewPixelArray(const char* name)
 	fPixelFolder->Add(newArray);
 	return newArray;
 }
+
+//------------------------------------------------------------------------------
 
 // Process() loops through all the Particles in the InputArrays, propagating
 // any which have a non-zero lifetime. 
@@ -194,6 +201,8 @@ void PropagatorAndPixelTracker::Process()
 	}
 }
 
+//------------------------------------------------------------------------------
+
 void PropagatorAndPixelTracker::Finish()
 {
 	// Delete all pixel objects
@@ -220,6 +229,8 @@ void PropagatorAndPixelTracker::Finish()
 	delete fItEndcap;
 }
 
+//------------------------------------------------------------------------------
+
 // This function rotates the daughter's 4-momentum and sets its position
 Candidate* PropagatorAndPixelTracker::Rotate(Candidate* const daughter, RotationXY const* const rotation, const TLorentzVector& mothersPosition)
 {
@@ -231,6 +242,8 @@ Candidate* PropagatorAndPixelTracker::Rotate(Candidate* const daughter, Rotation
 	
 	return daughter;
 }
+
+//------------------------------------------------------------------------------
 
 // Since PropagatorAndPixelTracker is intended to be used with longer decay chains than are 
 // required to get to the cylinder, once a particle makes it to the cylinder's edge, 
@@ -265,6 +278,8 @@ void PropagatorAndPixelTracker::NullifyDaughters(Candidate* const mother, const 
 		// For more information, see #6 in the class description in the header file
 	}
 }
+
+//------------------------------------------------------------------------------
 
 // This function propagates a particle in the magentic field
 // It returns the VALIDITY of the candidate pointer (NOT whether the candidate was propagated)
@@ -530,6 +545,8 @@ bool PropagatorAndPixelTracker::Propagate(Candidate* const candidate,	RotationXY
 	return true;
 }
 
+//------------------------------------------------------------------------------
+
 // This function has 4 returns (3 via pass-by-reference)
 // The actual return indicates whether (rotation) was created anew.
 // Ideally, the body of this function could be contained inside Propagate, but 
@@ -791,12 +808,18 @@ bool PropagatorAndPixelTracker::PropagateHelicly(Candidate* const candidate, boo
 	}
 }
 
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
+
 //PixelHit
 
 PixelHit::PixelHit(Candidate* const particle_in, 
 	                const Double_t ct_in, const VecXY& r_in, const Double_t z_in, 
 	                const VecXY& rBeta_in, const Double_t zBeta_in):
 particle(particle_in), r(r_in), rBeta(rBeta_in), ct(ct_in), z(z_in), zBeta(zBeta_in) {}
+
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 //PixelBarrel
 
@@ -808,6 +831,8 @@ PixelBarrel::PixelBarrel(const Double_t radius_in, const Double_t halfLength_in,
 	radius(radius_in), radius2(radius*radius), halfLength(halfLength_in),
 	rPhiWidth(rPhiWidth_in), zWidth(zWidth_in), thickness(thickness_in), lorentzAngle(lorentzAngle_in)
 {}
+
+//------------------------------------------------------------------------------
 		
 void PixelBarrel::AddHit(Candidate* const particle,
 		                   const Double_t ct, const VecXY& r, const Double_t z, 
@@ -817,21 +842,24 @@ void PixelBarrel::AddHit(Candidate* const particle,
 	//hits.emplace_back(particle, ct, r, z, rBeta, zBeta); // C++11 
 }
 
+//------------------------------------------------------------------------------
+
 void PixelBarrel::Clear()
 {
 	hits.clear();
 }
+
+//------------------------------------------------------------------------------
 
 const std::vector<PixelHit>& PixelBarrel::GetHits() const
 {
 	return hits;
 }
 
-
-
+//------------------------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 // PixelEndcap
-
 
 PixelEndcap::PixelEndcap(const Double_t innerRadius_in, const Double_t outerRadius_in, const Double_t zPosition_in,
 	                      const Double_t rPhiWidth_in, const Double_t rWidth_in, const Double_t thickness_in, 
@@ -843,6 +871,8 @@ zPosition(zPosition_in),
 rPhiWidth(rPhiWidth_in), rWidth(rWidth_in), thickness(thickness_in), 
 lorentzAngle(lorentzAngle_in), bladeAngle(bladeAngle_in)
 {}
+
+//------------------------------------------------------------------------------
 		
 void PixelEndcap::AddForwardHit(Candidate* const particle,
 		             const Double_t ct, const VecXY& r,
@@ -852,6 +882,8 @@ void PixelEndcap::AddForwardHit(Candidate* const particle,
 	//forward.emplace_back(particle, ct, r, zPosition, rBeta, zBeta); // C++11 
 }
 
+//------------------------------------------------------------------------------
+
 void PixelEndcap::AddBackwardHit(Candidate* const particle,
 		              const Double_t ct, const VecXY& r,
 	                 const VecXY& rBeta, const Double_t zBeta)
@@ -859,242 +891,11 @@ void PixelEndcap::AddBackwardHit(Candidate* const particle,
 	backward.push_back(PixelHit(particle, ct, r, -zPosition, rBeta, zBeta));
 	//backward.emplace_back(particle, ct, r, -zPosition, rBeta, zBeta); // C++11 
 }
+
+//------------------------------------------------------------------------------
 	
 const std::vector<PixelHit>&  PixelEndcap::GetForwardHits() const {return forward;}
+
+//------------------------------------------------------------------------------
+
 const std::vector<PixelHit>&  PixelEndcap::GetBackwardHits() const {return backward;}
-
-
-
-
-// VecXY
-
-VecXY::VecXY(): 
-	x(0.), y(0.) {}
-	
-VecXY::VecXY(int) {/*Don't initialize my vector, I know what I'm doing.*/}
-	
-VecXY::VecXY(const Double_t x_in, const Double_t y_in):
-	 x(x_in), y(y_in) {}
-		
-VecXY& VecXY::operator += (const VecXY& otherVec)
-{
-	x += otherVec.x;
-	y += otherVec.y;
-	return *this;
-}
-		
-VecXY& VecXY::operator -= (const VecXY& otherVec)
-{
-	x -= otherVec.x;
-	y -= otherVec.y;
-	return *this;
-}
-		
-VecXY& VecXY::operator *= (const Double_t scalar)
-{
-	x *= scalar;
-	y *= scalar;
-	return *this;
-}
-		
-VecXY& VecXY::operator /= (const Double_t scalar)
-{
-	x /= scalar;
-	y /= scalar;
-	return *this;
-}
-
-VecXY& VecXY::operator ~ ()
-{
-	x = -x;
-	y = -y;
-	return *this;
-}	
-
-VecXY VecXY::operator + (const VecXY& otherVec) const
-{
-	VecXY newVec(*this);
-	newVec += otherVec;
-	return newVec;
-}
-
-VecXY VecXY::operator + (VecXY&& otherVec) const
-{
-	otherVec += *this;
-	return otherVec;
-}
-
-VecXY VecXY::operator - (const VecXY& otherVec) const
-{
-	VecXY newVec(*this);
-	newVec -= otherVec;
-	return newVec;
-}
-
-VecXY VecXY::operator - (VecXY&& otherVec) const
-{
-	(~otherVec) += *this;
-	return otherVec;
-}
-
-VecXY VecXY::operator * (const Double_t scalar) const
-{
-	VecXY newVec(*this);
-	newVec *= scalar;
-	return newVec;
-}
-
-VecXY VecXY::operator / (const Double_t scalar) const
-{
-	VecXY newVec(*this);
-	newVec /= scalar;
-	return newVec;
-}
-
-Double_t VecXY::Norm() const
-{
-	return sqrt(x*x + y*y);
-}
-
-Double_t VecXY::Norm2() const
-{
-	return x*x + y*y;
-}
-
-Double_t VecXY::Dot(const VecXY& otherVec) const
-{
-	return (x*otherVec.x + y*otherVec.y);
-}
-
-Double_t VecXY::Cross(const VecXY& otherVec) const
-{
-	return (x*otherVec.y - y*otherVec.x);
-}
-
-// thisVec> x z^
-VecXY VecXY::CrossZHat() const
-{
-	return VecXY(y, -x);
-}
-
-
-// RotationXY
-RotationXY::RotationXY(const Double_t angle):
-	cosine(cos(angle)), sine(sin(angle)) {}
-	
-RotationXY::RotationXY(const Double_t cos_in, const Double_t sin_in):
-	cosine(cos_in), sine(sin_in) {} // No check for unitarity
-	
-RotationXY::RotationXY(const VecXY& vec)
-{
-	const Double_t norm = vec.Norm();
-	cosine = vec.x/norm;
-	sine = vec.y/norm;	
-}
-	
-RotationXY& RotationXY::Add(RotationXY const* const otherRotation)
-{
-	if(otherRotation)
-	{
-		const Double_t 
-			cosine0 = cosine,
-			sine0 = sine;
-	
-		// Add Angles
-		cosine = cosine0 * otherRotation->cosine  - sine0 * otherRotation->sine;
-		sine =   cosine0 * otherRotation->sine    + sine0 * otherRotation->cosine;
-	}
-	
-	return *this;
-}
-	
-// Rotate the candidate's 4-momentum in the XY plane
-void RotationXY::ForwardRotateDaughterMomentum(Candidate* const daughter) const
-{
-	TLorentzVector& pMu = daughter->Momentum;
-	// Copies of the original, since we're changing it
-	Double_t 
-		px0 = pMu.Px(),
-		py0 = pMu.Py();
-	
-	// Apply an ACTIVE rotation to the 4-momentum in the XY plane
-	pMu.SetPx(  cosine * px0  - sine   * py0 );
-	pMu.SetPy(  sine   * px0  + cosine * py0 );	
-}
-
-VecXY& RotationXY::ForwardRotate(VecXY& vec) const
-{
-	// Copies of the original, since we're changing it
-	const Double_t 
-		x0 = vec.x,
-		y0 = vec.y;
-		
-	// Apply an ACTIVE rotation to the vector
-	vec.x =   cosine * x0  - sine   * y0;
-	vec.y =   sine   * x0  + cosine * y0;
-	
-	return vec;
-}
-
-VecXY RotationXY::ForwardRotate(VecXY&& vec) const
-{
-	// Copies of the original, since we're changing it
-	const Double_t
-		x0 = vec.x,
-		y0 = vec.y;
-		
-	// Apply an ACTIVE rotation to the vector
-	vec.x =   cosine * x0  - sine   * y0;
-	vec.y =   sine   * x0  + cosine * y0;
-	
-	return vec;
-}
-
-VecXY& RotationXY::ReverseRotate(VecXY& vec) const
-{
-	// Copies of the original, since we're changing it
-	const Double_t 
-		x0 = vec.x,
-		y0 = vec.y;
-
-	// Reverse an ACTIVE rotation to the vector
-	vec.x =   cosine * x0  + sine   * y0;
-	vec.y = - sine   * x0  + cosine * y0;
-	
-	return vec;
-}
-
-VecXY RotationXY::ReverseRotate(VecXY&& vec) const
-{
-	// Copies of the original, since we're changing it
-	const Double_t 
-		x0 = vec.x,
-		y0 = vec.y;
-
-	// Reverse an ACTIVE rotation to the vector
-	vec.x =   cosine * x0  + sine   * y0;
-	vec.y = - sine   * x0  + cosine * y0;
-	
-	return vec;
-}	
-		
-VecXY RotationXY::ForwardRotateCopy(const VecXY& vec) const
-{
-	// Apply an ACTIVE rotation to the vector
-	return VecXY(
-		 cosine * vec.x  - sine   * vec.y,
-		 sine   * vec.x  + cosine * vec.y);		
-}
-
-VecXY RotationXY::ReverseRotateCopy(const VecXY& vec) const
-{
-	// Reverse an ACTIVE rotation to the vector
-	return VecXY(
-		  cosine * vec.x + sine   * vec.y,
-		- sine   * vec.x + cosine * vec.y);
-}
-
-Double_t RotationXY::CalculateAngle() const
-{
-	return atan2(sine, cosine);
-}
