@@ -22,7 +22,9 @@
 /** \class AllParticlePropagator
  *
  *  1.   This is a re-write (by K. Pedersen) of ParticlePropagator (by P. Demin), 
- *  with more complete propagtion in the magentic field and tracker material.
+ *  with more complete propagtion in the magentic field and tracker material. 
+ *  Actual code from ParticlePropagator was not used, but its underlying math
+ *  was used extensively in the crafting of this module.
  *
  *  2.   AllParticlePropagator (henceforth known as APPro) can propagate an *entire* 
  *  decay chain in the magnetic field. The propagation only begins once a decay chain 
@@ -41,19 +43,14 @@
  *  decay chain propagates, along with a cumulative shifting of creation vertices.
  *      Such a decay is rare, but this module was created with the intention of
  *  studying common muons in rare b-jets vs. rare muons in overwhelming light jet background. 
- *
- *  4.  Helical propagation is skipped (in favor of a straight-line approximation)
- *  whenever the bending would be too small to be meaningful (1/20th of a degree is 
- *  the default threshold). This cuts down on the work done by this module, limiting
- *  the actual full propagations to relatively few particles in the actual chain.  
  * 
- *  5.  APPro is intended to be used with the following Pythia options
+ *  4.  APPro is intended to be used with the following Pythia options
  *        ParticleDecays:limitRadius = on
- *        ParticleDecays:rMax = 20000 ! 20m of decay (change as desired)
- *        211:mayDecay = true !let charged pions decay
- *        321:mayDecay = true !let charged kaons decay
- *        130:mayDecay = true !let K_L0 decay
- *        13:mayDecay = false !don't let muons decay (too rare at normal energies)
+ *        ParticleDecays:rMax = 20000  ! 20m of decay (change as desired)
+ *        211:mayDecay = true  !let charged pions decay
+ *        321:mayDecay = true  !let charged kaons decay
+ *        130:mayDecay = true  !let K_L0 decay
+ *        13:mayDecay = false  !don't let muons decay (too rare at normal energies)
  *  These options turn on the decays of interest, then limit all decays
  *  to a sphere of 20m. 
  *     Without decay limitations, (and with no "stable" particles anymore)
@@ -66,109 +63,72 @@
  *  its decay chain is terminated (so any descendents it may have are thrown away,
  *  though its siblings are unaffeteced).
  *  
- *  6.  Because the entire decay chain is needed, including dereferencable daughter
+ *  5.  Because the entire decay chain is needed, including dereferencable daughter
  *  indices, PileupMerger cannot be used (in its 3.2.0 implementation). The inclusion
  *  of Pileup is natively supported by "add"-ing an InputArray containing pileup 
  *  in the configuration card (i.e. like a Merger module). Such arrays MUST
- *  include the entire decay chain (with functional/re-indexed daughter indices),
+ *  include whole decay chains (with functional/re-indexed daughter indices),
  *  though they don't need all the colored precursors. 
  *     This will likely require a new Pileup picking module (i.e. one that outputs 
  *  not only final state particles, but the entire, pertinent decay chain). This module
- *  is on an To-do list, but an example re-indexing function is supplied.
+ *  is on an To-do list, but a static class that strips whole decay chains from a 
+ *  Pythia event record is supplied.
  *
- *  7.  APPro absolutely NEEDS to know each particles proper lifetime, so this field
+ *  6.  APPro absolutely NEEDS to know each particles proper lifetime, so this field (CTau)
  *  has been added to the Candidate. Two other fields have also been added, in the 
  *  hopes that more accurate parametric tracking efficiencies can be developed which
- *  rely on a particle's production radius and its track length (though this would
+ *  rely on a particle's CreationRadius and its TrackLength (though this would
  *  also require the expansion of DelphesFormula):
  * 
- *  8.  New Candidate fields
+ *  7.  New Candidate fields
  *      * Float_t  CTau               [in mm].
  *                              This is the particles proper lifetime (its randomly
- *                              chosen ACTUAL proper lifetime, not the AVERAGE 
- *                              proper lifetime for its species).
+ *                              chosen ACTUAL proper lifetime, not the 1 e-fold 
+ *                              average proper lifetime for its species).
  *                              Pythia8 stores c*tau as Particle::Tau.
- *                              When a particle with descendents strikes the cylinder, 
- *                              terminating its decay chain, it's original lifetime
- *                              is replaced by its lifetime to the edge of the cylinder.
  *      * Float_t  CreationRadius     [in mm]. 
  *                              This is the distance, in the xy plane, from the beamline
  *                              to the particle's creation vertex. It can be used to 
- *                              determine the quality of a particle's seed (i.e. pixel seed?).
+ *                              determine the quality of a particle's track seed.
  *                              The original z-position can be accessed directly from
- *                              the 4-position of the creation vertex.
- *                              ATTENTION: This field is used as a flag for APPro, to 
- *                              determine when a Candidate has already been propagated. 
- *                              When it is negative, the particle has not been propagated
- *                              yet. Thus, it should be initialized to -1. 
+ *                              the 4-position of the creation vertex. *                              
  *      * Float_t  TrackLength       [in mm]. 
  *                              This is the total length of the particle's track as 
- *                              it moves throught the tracker. If is
- *                                   length = cTau * gamma * |p|/E = cTau * |p|/m = cTau*sqrt(gamma^2-1)
- *                              It can be viewed (roughly) as the number of track hits.
+ *                              it moves throught the tracker: 
+ *                                   TrackLength = ctPropagation * beta
+ *                              It can be viewed (roughly) as the number of track hits, 
+ *                              and is used as a quick pre-sort to keep tiny, invisible
+ *                              tracks from proliferating in the track output arrays.
  *                              WARNING: No eta cut is applied by APPro; all propagating
  *                              particles will have a non-zero TrackLength, even if they 
- *                              are at eta = 10, and do not actually strike any sensors.
+ *                              are at eta = 10, and cannot actually strike any sensors.
+ *                              ATTENTION: This field is used as a flag for APPro, to 
+ *                              determine when a Candidate has already been propagated. 
+ *                              When it is negative, the particle has not been proccessed
+ *                              by APPro yet. Thus, it should be initialized to -1.
  * 
- *  9.  Instead of storing each Candidate's original, un-propagted Position by cloning the 
- *  the original Candidate and storing the clone in the fArray of the propagated Candidate,
+ *  8.  Instead of storing each Candidate's original, un-propagted Position by cloning the 
+ *  original Candidate and storing the clone in the fArray of the propagated Candidate,
  *  APPro stores the original position in the "Area" 4-vector (which is 
  *  unused by all Candidates except jets, which should not be propagated).
  *
- *  10. APPro does not currently simulate any energy loss from multiple scattering,
+ *  9. APPro does not currently simulate any energy loss from multiple scattering,
  *  bremsstrahlung, or cyclotron radiation. A simple parameterization
  *  of these effects would be a welcome addition.
  
  *
  *  \author K. Pedersen - Illinois Institute of Technology - https://github.com/keith-pedersen
- *  \author P. Demin - UCL, Louvain-la-Neuve
  *
  */
 
 #include "classes/DelphesModule.h"
 
-// If the shower/hadronization/decay program does not include a magentic field,
-// then placing a decay chain inside a magnetic field requires correcting the
-// 4-momenta and creation vertices of all particles.
-
-// When a charged particle bends in a magnetic field, it's stored 4-momentum 
-// does not need to change (since its observed 4-momentum is determined from the 
-// location of its track hits and the bending radius). The 4-momentum of its daughters,
-// on the other hand, MUST change according to the angle of their mother's rotation.
-// Furthermore, the daughters creation vertices are also wrong, and should be shifted. 
-
-// The cumulative rotation and of a decay chain is kept in a DaughterRotation object.
-// The position of each daughter is set to be identical to the propagated position of its mother.
-
-// The DaughterShifter class rotates a particles 4-momentum and shifts its position. 
-// It is preferrable to TLorentzRotation because we ONLY need XY rotations
-
-class TLorentzVector;
 class Candidate;
-
-class DaughterRotation
-{
-	// This class
-	// (i) ACTIVE-ly rotates (i.e. keeps spatial axes the same, moves the vector)
-	// a Candidate's 4-momentum in the XY plane (energy and z-momentum is unaffected).
-	//  * If the right hand curls from x to y, and the thumb points to z (a RH xyz frame),
-	//    then an infinitessimal RH rotation is created by an infinitessimaly positive angle
-	
-	public:
-		DaughterRotation(const Double_t theta_in);
-		DaughterRotation(DaughterRotation const* const grandmother, const Double_t deltaTheta);
-		
-		void Rotate(Candidate* const candidate) const;
-		
-	private:
-		const Double_t 
-			theta,
-			cosTheta,
-			sinTheta;
-};
-
 class TObjArray;
 class TIterator;
+class TLorentzVector;
+class VecXY;
+class RotationXY;
 
 class AllParticlePropagator: public DelphesModule
 {
@@ -181,30 +141,37 @@ class AllParticlePropagator: public DelphesModule
 		void Finish();
 
 	private:
-		Candidate* Rotate(Candidate* const daughter, DaughterRotation const* const rotation, const TLorentzVector& mothersPosition);
+		Candidate* Rotate(Candidate* const daughter, RotationXY const* const rotation, const TLorentzVector& mothersPosition);
+		// Rotate's a daughter's 4-momentum and sets its position to (mothersPosition)
+		
 		void NullifyDaughters(Candidate* const candidate, const bool nullifyThisParticle = false);
-		bool Propagate(Candidate* const candidate, DaughterRotation const* rotation);
-
-		Double_t fRadius, fRadius2;     //    assumed supplied in [meters], converted to [mm] by Init()
+		// When a particle hits the cylinder, the rest of its decay chain should be nullified.
+		// NullifyDaughters(...) is called recurisively on all daughters.
+		
+		bool Propagate(Candidate* const candidate, RotationXY const* rotation);
+		// Propagates a particle to its final position (decay or cylinder strike)
+		
+		bool PropagateHelicly(Candidate* const candidate, const bool decays,
+		                      const VecXY& r0, const Double_t z0,
+		                      const VecXY& r0Beta, const Double_t R0Beta, const Double_t z0Beta,
+		                      const Double_t omegaOverC, 
+		                      RotationXY const*& rotation,
+		                      Double_t& ctProp, VecXY& rFinal);
+		// Charged particles require helicle propagation. To keep Propagate(...) clean,
+		// helicle propagation is accomplished in a separate function. 
+		                      
+		Double_t fRadius, fRadius2;     //    supplied in [meters], converted to [mm] by Init()
 		                                // Radius of full tracker cylinder (and squared radius, for re-use)
 		
-		Double_t fHalfLength;           //    assumed supplied in [meters], converted to [mm] by Init()
+		Double_t fHalfLength;           //    supplied in [meters], converted to [mm] by Init()
 		                                // Half the length of the full tracker cylinder
 		
-		Double_t fBz;                   //    assumed supplied in [Tesla]
-		                                // Strengh of perflectly homogenous magnetic field
-		                                // alligned with the +z direction
-		
-		Double_t fMinHelixAngle;        //    assumed supplied in [radians]
-		                                // If a particle's total rotation, about its helical center,
-		                                // is less than fMinimumHelixAngle (should be small),
-		                                // the Candidate is propagated with a straight
-		                                // line approximation
+		Double_t fBz;                   //    supplied in [Tesla]
+		                                // Strengh of perflectly homogenous magnetic field (B> = fBz z^)		                                
 		                                
-		Double_t fMinTrackLength;       //    assumed supplied in [meters], converted to [mm] by Init()
+		Double_t fMinTrackLength;       //    supplied as ratio of fRadius, converted to [mm] by Init()
 		                                // Used for a quick pre-sort of tracks which are entirely
-		                                // too small, so that the charged OutputArrays aren't
-		                                // filled with tiny, invisible tracks.
+		                                // too small to show up in charged OutputArrays
 
 		// It would be nice to parameterize the energy loss, but this is not supported yet.
 				
@@ -218,7 +185,109 @@ class AllParticlePropagator: public DelphesModule
 		TObjArray* fElectronOutputArray; //! Electron track Candidates
 		TObjArray* fMuonOutputArray; //! Muon track candidates
 				
-		ClassDef(AllParticlePropagator, 1)
+		ClassDef(AllParticlePropagator, 2)
+};
+
+// If the shower/hadronization/decay program does not include a magentic field,
+// then placing a decay chain inside a magnetic field requires correcting the
+// 4-momenta and creation vertices of all particles.
+
+// When a charged particle bends in a magnetic field, it's stored 4-momentum 
+// does not need to change (since its observed 4-momentum is determined from the 
+// location of its track hits and the bending radius). The 4-momentum of its DAUGHTERS,
+// on the other hand, MUST change according to the angle of their mother's rotation.
+// Furthermore, the daughters creation vertices are also wrong (i.e. because there 
+// mother was propagated in a straight line), and should also be shifted.
+
+// In order to fascilliate the the cumulative rotation of a decay chain, two classes were
+// created. These classes likely duplicated the efforts of other classes (e.g. Root), but 
+// they are more compact. For example, since we ONLY need rotations in the XY plane, using 
+// TLorentzRotation is overkill.
+
+// VecXY is a minimal class for working in the transverse plane
+// 
+class VecXY // Double checked 1/31/15
+{
+	public: 
+		Double_t x, y;
+		
+		VecXY();    // Initialize to [0,0]
+		VecXY(int); // Create uninitialized vector
+		VecXY(const Double_t x_in, const Double_t y_in);
+		
+		VecXY&   operator += (const VecXY& otherVec);
+		VecXY&   operator -= (const VecXY& otherVec);
+		VecXY&   operator *= (const Double_t scalar);
+		VecXY&   operator /= (const Double_t scalar);
+		
+		VecXY&   operator ~ (); // Parity flip (reverse coordinates)
+		
+		VecXY    operator + (const VecXY& otherVec) const;
+		VecXY    operator + (VecXY&& otherVec)      const;
+		VecXY    operator - (const VecXY& otherVec) const;
+		VecXY    operator - (VecXY&& otherVec)      const;
+		VecXY    operator * (const Double_t scalar) const;
+		VecXY    operator / (const Double_t scalar) const;
+		
+		Double_t Norm()                             const;
+		Double_t Norm2()                            const; // Norm**2
+		Double_t Dot(const VecXY& otherVec)         const;
+		Double_t Cross(const VecXY& otherVec)       const; // this> x other>
+
+		VecXY    CrossZHat()                        const; // this> x z^
+};
+
+// RotationXY is a minimal class for performing ACTIVE rotations in the transverse plane
+// A PASSIVE rotation is accomplished via the ReverseRotate() function
+//
+class RotationXY // Double checked 1/31/15
+{
+	protected:
+		Double_t cosine, sine;
+		
+	public:
+		RotationXY(const Double_t angle);
+		RotationXY(const Double_t cos_in, const Double_t sin_in); // Does NOT check for unitarity
+		RotationXY(const VecXY& vec);
+		
+		RotationXY&  Add(RotationXY const* const other);
+		
+		void         ForwardRotateDaughterMomentum(Candidate* const daughter) const;
+		
+		VecXY&       ForwardRotate(VecXY& vec)                                const;
+		VecXY        ForwardRotate(VecXY&& vec)                               const;
+	
+		VecXY&       ReverseRotate(VecXY& vec)                                const;
+		VecXY        ReverseRotate(VecXY&& vec)                               const;
+		
+		VecXY        ForwardRotateCopy(const VecXY& vec)                      const;
+		VecXY        ReverseRotateCopy(const VecXY& vec)                      const;
+		
+		Double_t     CalculateAngle()                                         const;
+};
+
+// DecayChainExtractor is NOT thread safe
+// DecayChainExtractor takes a Pythia event record and strips out the entire decay
+// chains that are needed by APPro. 
+
+namespace Pythia8 {class Particle; class Event;};
+
+class DecayChainExtractor
+{
+	private:
+		static const Int_t PROCESSED_STATUS;
+		
+		static Pythia8::Event* event;
+		static DelphesFactory* factory;
+		static TObjArray* outputArray;
+		static Int_t outputArrayCurrentSize;
+		static void (*PythiaParticleToDelphesCandidate)(Pythia8::Particle const&, Candidate* const);
+		
+		static void AddDaughters(const Int_t particleIndex, Int_t pythiaIndexShift, Int_t motherThenLastDaughterIndex);
+		
+	public:
+		static void AddFullDecayChain(Pythia8::Event& event_in, DelphesFactory* const factory_in, 
+			TObjArray* const outputArray_in, void (* const PythiaParticleToDelphesCandidate_in) (Pythia8::Particle const&, Candidate*));
 };
 
 #endif

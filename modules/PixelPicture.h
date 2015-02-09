@@ -23,8 +23,33 @@
  *
  *  Outputs a picture of the pixel clusters near the center of high-pt jets
  *
- *  \author K. Pedersen - Illinois Institute of Technology
+ *  Being detected in the pixel detector relies on several efficiencies. These 
+ *  are not currently imlpemented.
+ *    a. When a particle physically strikes a pixel detector layer, a 4-vector describing
+ *        its hit is only stored IFF it passes the layer's *intrinsic* efficiency :
+ *          * Intrinsic efficiency = The probability that a particle will deposit enough charge to be detected.
+ *          * There are seperate intrinsic efficiencies for muons and everything else (hadrons/electrons).
+ *          * This does not include the probability that a hit won't be reconstructed due
+ *            to cuts (e.g. bad cluster geometry), so the intrinsic efficiency should be
+ *            independent of particle flux.
+ *        There is a limitations to this efficiency model :
+ *          * Since efficiency is calculated independently for each particle, a particle which
+ *            deposits a below threshold charge cannot become a hit if the same pixel is struck
+ *            by a second particle.
+ *          * The intrinsic efficiency has no dependence on energy/eta
+ *          * Barrel layers are modelled as infinitely thin; there is no accounting for grazing
+ *            hits by loopers, which might streak the pixels. 
+ *    b. After all the hits in a layer have been collected, they will be binned in certain 
+ *         regions of interest. Before this is accomplished, bins will be deactivated 
+ *         based on the layers *online* efficiency (to simulate dead pixels). 
+ *           @ Online efficiency = The probability that any given pixel is functioning properly. 
+ *           @ There are seperate online efficiencies for pixel and endcap layers
+ *         There are also limitations with this model:
+ *           @ The location of dead pixels is randomly determined before each binning.
+ *           @ Besides the seperate efficiency for barrel and endcap, no eta
+ *             dependence is simulated.
  *
+ *  \author K. Pedersen - Illinois Institute of Technology
  */
 
 #include "classes/DelphesModule.h"

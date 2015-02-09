@@ -25,6 +25,10 @@
  *
  */
 
+#include "modules/PixelPicture.h"
+#include "modules/PropagatorAndPixelTracker.h"
+#include "classes/DelphesClasses.h"
+
 #include <cmath>
 #include <vector>
 #include <sstream>
@@ -32,10 +36,6 @@
 
 #include "TObjArray.h"
 #include "TLorentzVector.h"
-
-#include "classes/DelphesClasses.h"
-#include "modules/PixelPicture.h"
-#include "modules/PropagatorAndPixelTracker.h"
 
 //#include "classes/DelphesFactory.h"
 //#include "classes/DelphesFormula.h"
