@@ -223,9 +223,9 @@ class VecXY // Double checked 1/31/15
 		VecXY&   operator ~ (); // Parity flip (reverse coordinates)
 		
 		VecXY    operator + (const VecXY& otherVec) const;
-		VecXY    operator + (VecXY&& otherVec)      const;
+//		VecXY    operator + (VecXY&& otherVec)      const;
 		VecXY    operator - (const VecXY& otherVec) const;
-		VecXY    operator - (VecXY&& otherVec)      const;
+//		VecXY    operator - (VecXY&& otherVec)      const;
 		VecXY    operator * (const Double_t scalar) const;
 		VecXY    operator / (const Double_t scalar) const;
 		

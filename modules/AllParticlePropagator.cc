@@ -689,11 +689,13 @@ VecXY VecXY::operator + (const VecXY& otherVec) const
 
 //------------------------------------------------------------------------------
 
+/*
 VecXY VecXY::operator + (VecXY&& otherVec) const
 {
 	otherVec += *this;
 	return otherVec;
 }
+*/
 
 //------------------------------------------------------------------------------
 
@@ -706,11 +708,13 @@ VecXY VecXY::operator - (const VecXY& otherVec) const
 
 //------------------------------------------------------------------------------
 
+/*
 VecXY VecXY::operator - (VecXY&& otherVec) const
 {
 	(~otherVec) += *this;
 	return otherVec;
 }
+*/
 
 //------------------------------------------------------------------------------
 
