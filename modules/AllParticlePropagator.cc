@@ -689,11 +689,13 @@ VecXY VecXY::operator + (const VecXY& otherVec) const
 
 //------------------------------------------------------------------------------
 
+/*
 VecXY VecXY::operator + (VecXY&& otherVec) const
 {
 	otherVec += *this;
 	return otherVec;
 }
+*/
 
 //------------------------------------------------------------------------------
 
@@ -706,11 +708,13 @@ VecXY VecXY::operator - (const VecXY& otherVec) const
 
 //------------------------------------------------------------------------------
 
+/*
 VecXY VecXY::operator - (VecXY&& otherVec) const
 {
 	(~otherVec) += *this;
 	return otherVec;
 }
+*/
 
 //------------------------------------------------------------------------------
 
@@ -924,7 +928,7 @@ Double_t RotationXY::CalculateAngle() const
 // Example usage: 
 
 /*
-void PythiaParticleToDelphesCandidate(Pythia8::Particle const&, Candidate* candidate)
+void MyPythiaParticleToDelphesCandidateFunction(Pythia8::Particle const&, Candidate* candidate)
 {
 	// Your initialization code
 	// Setting the mother/daughter indices is pointless, as they will be subsequently overwritten
@@ -933,8 +937,7 @@ void PythiaParticleToDelphesCandidate(Pythia8::Particle const&, Candidate* candi
 void SomeOtherFunction()
 {
 	// Some code
-	DecayChainExtractor extractor;
-	extractor.AddFullDecayChain(pythia->event, factory, outputArray, &MyPythiaParticleToDelphesCandidateFunction);
+	DecayChainExtractor::AddFullDecayChain(pythia->event, factory, outputArray, &MyPythiaParticleToDelphesCandidateFunction);
 }
 */
 
@@ -973,7 +976,7 @@ void DecayChainExtractor::AddFullDecayChain(Pythia8::Event& event_in, DelphesFac
 			outputArray->Add(factory->NewCandidate()); 
 			// Calculate the difference between Pythia's and Delphes' indexing for this particle
 			const Int_t pythiaIndexShift = pythiaIndex - outputArrayCurrentSize;
-			// Now add all the daughters (passing 0 as the last argument to 
+			// Now add all its daughters (passing 0 as the last argument to 
 			// indicate that this particle's mother is not dereferencable).
 			// Also increment the size of the outputArray b/c it just grew
 			AddDaughters(outputArrayCurrentSize++, pythiaIndexShift, 0);
@@ -986,7 +989,6 @@ void DecayChainExtractor::AddFullDecayChain(Pythia8::Event& event_in, DelphesFac
 void DecayChainExtractor::AddDaughters(const Int_t particleIndex, Int_t pythiaIndexShift, Int_t motherThenLastDaughterIndex)
 {
 	Int_t currentDaughterIndex;
-			
 	{
 		Pythia8::Particle& particle = event->operator[](particleIndex + pythiaIndexShift);
 		Candidate* const candidate = static_cast<Candidate*>(outputArray->At(particleIndex));
@@ -1020,17 +1022,18 @@ void DecayChainExtractor::AddDaughters(const Int_t particleIndex, Int_t pythiaIn
 		
 		//	We will now add a Candidate* to the outputArray for every daughter this particle has.
 		// It is important to do this now because, if the daughter itself has daughters, the daughter
-		// will start adding them recursively, and we don't want her putting them in the range [D1, D2].
-		for(currentDaughterIndex = candidate->D1; currentDaughterIndex <= motherThenLastDaughterIndex; ++currentDaughterIndex)
+		// will add them all recursively, and we don't want her putting them in the range [D1, D2].
+		while(outputArrayCurrentSize <= motherThenLastDaughterIndex)
 		{
 			outputArray->Add(factory->NewCandidate());
 			++outputArrayCurrentSize;
 		}
 		
-		// Now reset back to the first daughter for the following loop
+		// Now set (currentDaughterIndex) to the first daughter for initializing loop
 		currentDaughterIndex = candidate->D1;
 	}
 	
+	// Add all the daughters (and they're daughters)
 	for(; currentDaughterIndex <= motherThenLastDaughterIndex; currentDaughterIndex++)
 	{
 		AddDaughters(currentDaughterIndex, pythiaIndexShift, particleIndex);

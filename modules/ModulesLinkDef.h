@@ -62,6 +62,7 @@
 #include "modules/AllParticlePropagator.h"
 #include "modules/PropagatorAndPixelTracker.h"
 #include "modules/PixelPicture.h"
+#include "modules/LHCOWriterDirect.h"
 
 #ifdef __CINT__
 
@@ -106,5 +107,6 @@
 #pragma link C++ clas AllParticlePropagator+;
 #pragma link C++ clas PropagatorAndPixelTracker+;
 #pragma link C++ clas PixelPicture+;
+#pragma link C++ clas LHCOWriterDirect+;
 
 #endif
