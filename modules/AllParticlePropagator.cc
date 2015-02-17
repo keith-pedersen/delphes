@@ -243,7 +243,11 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			if(((candidate->CreationRadius = hypot(position.X(), position.Y())) > fRadius)
 				or (abs(position.Z()) > fHalfLength))
 			{
-				throw runtime_error("(AllParticlePropagator::Propagate): Particle created outside the cylinder! Did you include the entire decay chain? Did you re-index?");
+				stringstream message;
+				message << "(AllParticlePropagator::Propagate1): Particle created outside the cylinder ";
+				message << "( " << candidate->CreationRadius << " , " << position.Z() << " )!\n";
+				message << "Did you include the entire decay chain? Did you re-index?\n";
+				throw runtime_error(message.str());
 				// For more information on this error, see #5 in the class description in the header file
 			}
 		}
@@ -268,7 +272,11 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			// Set CreationRadius, then check that the particle was created inside the cylinder
 			if(((candidate->CreationRadius = r0.Norm()) > fRadius) or (abs(z0) > fHalfLength))
 			{
-				throw runtime_error("(AllParticlePropagator::Propagate): Particle created outside the cylinder! Did you include the entire decay chain? Did you re-index?");
+				stringstream message;
+				message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
+				message << "( " << candidate->CreationRadius << " , " << position.Z() << " )!\n";
+				message << "Did you include the entire decay chain? Did you re-index?\n";
+				throw runtime_error(message.str());
 				// For more information on this error, see #5 in the class description in the header file
 			}
 
@@ -296,7 +304,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				// copysign() ensures that, if (z0Beta = (+/-)0.), we'll get (ctEndcap = inf)
 				// (IFF the particle is inside the cylinder, which we already verified)
 								
-				if(ctEndcap < ctProp)
+				if(ctEndcap <= ctProp)
 				{
 					ctProp = ctEndcap;
 					decays = false; // Does not decay, exits the cylinder
@@ -331,7 +339,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				// PropagateHelicly() will propagate the particle. It has 4 returns. Its official
 				// return indicates whether "rotation" (passed be reference) was changed. Of
 				// course all charged particles rotate, but rotation only needs to change when 
-				// the particle decays. If it strikes the cylinder, its daughters don't require
+				// the particle decays. If it strikes the cylinder, its daughters doesn't require
 				// rotation. The propagation solutions (ctProp and rFinal) are also passed by reference.
 				newRotation = PropagateHelicly(candidate, decays,
 					                            r0, z0, 
@@ -378,7 +386,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				const Double_t LzOverPt = r0.Cross(r0BetaHat);
 				const Double_t ctBarrel = (-r0BetaHat.Dot(r0) + sqrt(fRadius2 - LzOverPt*LzOverPt))/R0Beta;
 				
-				if(ctBarrel < ctProp)
+				if(ctBarrel <= ctProp)
 				{
 					ctProp = ctBarrel;
 					decays = false;
@@ -423,7 +431,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				candidate->Status = 1; // Ensure the particle is now considered final state
 				fOutputArray->Add(candidate); // Only candidates which puncture the cylinder should hit the calorimter
 				NullifyDaughters(candidate); // Terminate its decay chain by nullifying its daughters
-				return true; // Return to the calling instance
+				return true; // Return to the calling instance immedietely
 			}
 		}//End propagation
 	}//End temporary variable scope
@@ -498,7 +506,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 	
 	// We need the length of rCenter> and r>_helix
 	const Double_t 
-		R_helix = R0Beta/abs(omegaOverC), // (v/c) = (omega*R)/c ... easier than r0_helix.Norm()
+		R_helix = R0Beta/abs(omegaOverC), // (v/c) = (omega*R)/c ... quicker than r0_helix.Norm()
 		RCenter = rCenter.Norm();
 		
 	// For ease of working with angles, we will rotate to the normalized, helixPrime 
@@ -513,8 +521,8 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 	const RotationXY chi(rCenter.x/RCenter, rCenter.y/RCenter);
 		
 	// Now PASSIVELY rotate a normalized r0>_helix to the helixPrime system (rho indicates unit vector)
-	const VecXY rho0_hxPr = chi.ReverseRotate(r0_helix/R_helix); // Passive rotation is the same as reversing an active rotation
-	
+	const VecXY rho0_hxPr = chi.ReverseRotateCopy(r0_helix/R_helix); // Passive rotation is the same as reversing an active rotation
+		
 	const Double_t signQ = - copysign(1., omegaOverC);
 	Double_t phi0; // The initial anglular position (in hxPr) will be set in a moment
 	
@@ -538,9 +546,14 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// Thus, we can find the particle's initial displacement from close approach 
 			// (deltaPhiCloseApproach = phiCloseApproach - phi0 ) by dotting rho0>_hxPr with 
 			// [-1, 0], then giving it the same sign as y
-			const Double_t deltaPhiCloseApproach = copysign(acos(-rho0_hxPr.x), rho0_hxPr.y);
-			// Once again, copysign is safe because if y == (+/-)0, acos(-x) == 0.
-	
+			// Occasionally there will be a small numerical error that will cause (rho0_hxPr ~= -1 - machineEpsilon)
+			// This error is associated with a very large RCenter, and is a problem for the acos().
+			// The opposite situation (rho0_hxPr ~= 1 + machineEpsilon) is impossible, since the 
+			// particle must be inside the barrel.
+			const Double_t deltaPhiCloseApproach = 
+				(rho0_hxPr.x <= -1.) ? 0. : copysign(acos(-rho0_hxPr.x), rho0_hxPr.y);
+				// Once again, copysign is safe because if y == (+/-)0, acos(-x) == 0.
+				
 			candidate->Zd = z0 + z0Beta * (deltaPhiCloseApproach / omegaOverC);
 		
 			// Now we can use deltaPhiCloseApproach to find phi0
@@ -578,9 +591,15 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		const Double_t cosEpsilon = (fRadius2 - RCenter*RCenter - R_helix*R_helix)/(2*R_helix*RCenter);
 		const Double_t ctBarrel = (signQ*acos(cosEpsilon) - phi0) / omegaOverC;
 		
-		if(ctBarrel < ctProp) // The barrel exit is the closest exit
+		if(abs(cosEpsilon) > 1.)
+			throw runtime_error("(AllParticlePropagator::PropagateHelicly): |cosEpsilon| > 1, numerical error!");
+		
+		if(ctBarrel <= ctProp) // The barrel exit is the closest exit
 		{
 			ctProp = ctBarrel;
+			
+			if(ctBarrel < 0.)
+				throw runtime_error("(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your math is all wrong!");
 						
 			// Because we know cosEpsilon, we know where the exit vector is in hxPr
 			// Creating it in hxPr then rotating back to helix is much faster then
@@ -738,6 +757,7 @@ VecXY VecXY::operator / (const Double_t scalar) const
 
 Double_t VecXY::Norm() const
 {
+	//return sqrt(x*x + y*y);
 	return hypot(x, y);
 }
 
