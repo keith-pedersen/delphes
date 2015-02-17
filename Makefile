@@ -335,6 +335,7 @@ tmp/modules/ModulesDict.$(SrcSuf): \
 	modules/Cloner.h \
 	modules/Weighter.h \
 	modules/Hector.h \
+	modules/HighPtBTagger.h \
 	modules/LHCOWriterDirect.h \
 	modules/PropagatorAndPixelTracker.h \
 	modules/PixelPicture.h \
@@ -615,6 +616,13 @@ tmp/modules/ExampleModule.$(ObjSuf): \
 	external/ExRootAnalysis/ExRootResult.h \
 	external/ExRootAnalysis/ExRootFilter.h \
 	external/ExRootAnalysis/ExRootClassifier.h
+tmp/modules/HighPtBTagger.$(ObjSuf): \
+	modules/HighPtBTagger.$(SrcSuf) \
+	modules/HighPtBTagger.h \
+	classes/DelphesClasses.h \
+	external/fastjet/PseudoJet.hh \
+	external/fastjet/JetDefinition.hh \
+	external/fastjet/ClusterSequence.hh
 tmp/modules/LHCOWriterDirect.$(ObjSuf): \
 	modules/LHCOWriterDirect.$(SrcSuf) \
 	modules/LHCOWriterDirect.h \
@@ -895,6 +903,7 @@ DELPHES_OBJ +=  \
 	tmp/modules/EnergyScale.$(ObjSuf) \
 	tmp/modules/EnergySmearing.$(ObjSuf) \
 	tmp/modules/ExampleModule.$(ObjSuf) \
+	tmp/modules/HighPtBTagger.$(ObjSuf) \
 	tmp/modules/LHCOWriterDirect.$(ObjSuf) \
 	tmp/modules/PropagatorAndPixelTracker.$(ObjSuf) \
 	tmp/modules/PixelPicture.$(ObjSuf) \
@@ -1545,6 +1554,10 @@ modules/IdentificationMap.h: \
 	@touch $@
 
 modules/ExampleModule.h: \
+	classes/DelphesModule.h
+	@touch $@
+	
+modules/HighPtBTagger.h: \
 	classes/DelphesModule.h
 	@touch $@
 	

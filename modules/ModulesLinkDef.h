@@ -63,6 +63,7 @@
 #include "modules/PropagatorAndPixelTracker.h"
 #include "modules/PixelPicture.h"
 #include "modules/LHCOWriterDirect.h"
+#include "modules/HighPtBTagger.h"
 
 #ifdef __CINT__
 
@@ -104,9 +105,10 @@
 #pragma link C++ class ExampleModule+;
 
 //KDP modules
-#pragma link C++ clas AllParticlePropagator+;
-#pragma link C++ clas PropagatorAndPixelTracker+;
-#pragma link C++ clas PixelPicture+;
-#pragma link C++ clas LHCOWriterDirect+;
+#pragma link C++ class AllParticlePropagator+;
+#pragma link C++ class PropagatorAndPixelTracker+;
+#pragma link C++ class PixelPicture+;
+#pragma link C++ class LHCOWriterDirect+;
+#pragma link C++ class HighPtBTagger+;
 
 #endif
