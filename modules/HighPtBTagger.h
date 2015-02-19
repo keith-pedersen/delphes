@@ -69,6 +69,8 @@
 
 #include "classes/DelphesModule.h"
 
+#include "TLorentzVector.h"
+
 class TObjArray;
 class TIterator;
 class Candidate;
@@ -76,6 +78,7 @@ class Candidate;
 namespace fastjet 
 {
   class JetDefinition;
+  class PseudoJet;
 }
 
 class HighPtBTagger: public DelphesModule
@@ -96,6 +99,12 @@ class HighPtBTagger: public DelphesModule
 		Double_t fMinCoreRatio;
 		Double_t fMinCoreMass;
 		Double_t fMaxEmissionInvariant;
+		
+		// Testing variables
+		int jetsAboveThreshold;
+		int jetsWithGoodMuons;
+		double jetsTagged;
+		std::vector<Double_t> invariants;	
 
 		TObjArray const* fJetInputArray; //!
 		TIterator* fItJetInputArray; //!
@@ -103,6 +112,14 @@ class HighPtBTagger: public DelphesModule
 		fastjet::JetDefinition* fJetDefinition;
 
 		ClassDef(HighPtBTagger, 1)
+};
+
+struct ECalTower
+{
+	TLorentzVector eCalMomentum;
+	Double_t hCalEnergy;
+		
+	ECalTower(const TLorentzVector& eCalMomentum_in, const Double_t hCalEnergy_in);
 };
 
 bool SortCandidatePt_Low2High(Candidate const* one, Candidate const* two);
