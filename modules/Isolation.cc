@@ -101,7 +101,8 @@ void Isolation::Init()
   const char *rhoInputArrayName;
 
   fDeltaRMax = GetDouble("DeltaRMax", 0.5);
-
+  fDeltaRMax2 = fDeltaRMax*fDeltaRMax;
+  
   fPTRatioMax = GetDouble("PTRatioMax", 0.1);
 
   fPTSumMax = GetDouble("PTSumMax", 5.0);
@@ -154,7 +155,7 @@ void Isolation::Process()
   TObjArray *isolationArray;
   Double_t sum, ratio;
   Int_t counter;
-  Double_t eta = 0.0;
+  Double_t absEta = 0.0;
   Double_t rho = 0.0;
 
   if(fRhoInputArray && fRhoInputArray->GetEntriesFast() > 0)
@@ -170,30 +171,37 @@ void Isolation::Process()
   if(isolationArray == 0) return;
 
   TIter itIsolationArray(isolationArray);
+  
+  //KDP - Strip all neccessary information from IsolationArray into a vector
+  //      of IsolatingObjects
+  std::vector<IsolatingObject> newIsolationArray;
+  
+  while((isolation = static_cast<Candidate*>(itIsolationArray.Next())))
+  {
+    newIsolationArray.push_back(IsolatingObject(isolation));
+  }
 
   // loop over all input jets
   fItCandidateInputArray->Reset();
   while((candidate = static_cast<Candidate*>(fItCandidateInputArray->Next())))
   {
     const TLorentzVector &candidateMomentum = candidate->Momentum;
-    eta = TMath::Abs(candidateMomentum.Eta());
-
+    absEta = TMath::Abs(candidateMomentum.Eta());
+   
     // loop over all input tracks
     sum = 0.0;
     counter = 0;
-    itIsolationArray.Reset();
-    while((isolation = static_cast<Candidate*>(itIsolationArray.Next())))
+    for(std::vector<IsolatingObject>::const_iterator itIsolation = newIsolationArray.begin();
+      itIsolation not_eq newIsolationArray.end(); ++itIsolation)
     {
-      const TLorentzVector &isolationMomentum = isolation->Momentum;
-
-      if(candidateMomentum.DeltaR(isolationMomentum) <= fDeltaRMax &&
-         candidate->GetUniqueID() != isolation->GetUniqueID())
-      {
-        sum += isolationMomentum.Pt();
+    	if((itIsolation->DeltaR2(candidateMomentum) <= fDeltaRMax2)
+    	   and (candidate->GetUniqueID() not_eq itIsolation->GetUniqueID()))
+    	{
+        sum += itIsolation->Pt();
         ++counter;
       }
     }
-
+    
     // find rho
     rho = 0.0;
     if(fRhoInputArray)
@@ -201,7 +209,7 @@ void Isolation::Process()
       fItRhoInputArray->Reset();
       while((object = static_cast<Candidate*>(fItRhoInputArray->Next())))
       {
-        if(eta >= object->Edges[0] && eta < object->Edges[1])
+        if(absEta >= object->Edges[0] && absEta < object->Edges[1])
         {
           rho = object->Momentum.Pt();
         }
@@ -217,5 +225,38 @@ void Isolation::Process()
     fOutputArray->Add(candidate);
   }
 }
+
+//------------------------------------------------------------------------------
+
+IsolatingObject::IsolatingObject(Candidate const* const isolatingObject):
+	uniqueID(isolatingObject->GetUniqueID()), 
+	pt((isolatingObject->Momentum).Pt()), 
+	eta((isolatingObject->Momentum).Eta()),
+	phi((isolatingObject->Momentum).Phi())
+{}
+
+//------------------------------------------------------------------------------
+
+const Double_t PI = acos(-1.);
+
+Double_t IsolatingObject::DeltaR2(const TLorentzVector& candidateMomentum) const
+{
+	// This way of calculating deltaPhi doesn't require branches, so it is slightly faster 
+	// than the conventional way (finding the absolute difference, then subtracting Pi 
+	// if it's greater than Pi)
+	const Double_t 
+		dPhi = PI - abs(PI - abs(phi - candidateMomentum.Phi())),
+		dEta = eta - candidateMomentum.Eta();
+		
+	return dPhi*dPhi + dEta*dEta;
+}
+
+//------------------------------------------------------------------------------
+
+Double_t IsolatingObject::Pt() const {return pt;}
+
+//------------------------------------------------------------------------------
+
+UInt_t IsolatingObject::GetUniqueID() const {return uniqueID;}
 
 //------------------------------------------------------------------------------

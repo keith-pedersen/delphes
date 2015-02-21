@@ -29,6 +29,9 @@
  *  \author P. Demin - UCL, Louvain-la-Neuve
  *
  */
+ 
+// KDP - Small enhancement by K. Pedersen - Illinois Institute of Technology <https://github.com/keith-pedersen>
+//       Prevent redundant calculation of Phi() and Eta() for IsolationArray
 
 #include "classes/DelphesModule.h"
 
@@ -36,6 +39,8 @@ class TObjArray;
 
 class ExRootFilter;
 class IsolationClassifier;
+class Candidate;
+class TLorentzVector;
 
 class Isolation: public DelphesModule
 {
@@ -51,6 +56,7 @@ public:
 private:
 
   Double_t fDeltaRMax;
+  Double_t fDeltaRMax2;
 
   Double_t fPTRatioMax;
 
@@ -76,7 +82,27 @@ private:
 
   TObjArray *fOutputArray; //!
 
-  ClassDef(Isolation, 1)
+  ClassDef(Isolation, 2)
+};
+
+// KDP
+// Stores all neccessary isolation information for the Candidates in the 
+// IsolationArray, then calculates DeltaR**2 without redundant calculations
+class IsolatingObject
+{
+	UInt_t uniqueID;
+	Double_t
+		pt, 
+		eta, 
+		phi;
+	
+	public: 
+	
+	IsolatingObject(Candidate const* const isolatingObject);
+	
+	Double_t DeltaR2(const TLorentzVector& candidateMomentum) const;
+	Double_t Pt() const;
+	UInt_t GetUniqueID() const;
 };
 
 #endif
