@@ -44,6 +44,42 @@
 
 using namespace std;
 
+class MotherTower
+{
+	private:
+		fastjet::PseudoJet unitMomentum; // Unit vector	
+		
+	public: 
+		
+		const Double_t 
+			emEnergy,
+			hadEnergy;
+		Double_t	remainingShare;			
+	
+		MotherTower(const TLorentzVector& momentum, const Double_T emEnergy_in, const Double_t hadEnergy_in):
+			unitMomentum(), emEnergy(emEnergy_in), hadEnergy(hadEnergy_in), remainingShare(1.)
+		{
+			TVector3 motherP3 = momentum.Vect();
+			motherP3 *= (1./motherP3.Mag());
+			unitMomentum.reset_momentum(motherP3.Px(), motherP3.Py(), motherP3.Pz(), 1.);			
+		}
+		
+		const fastjet::PseudoJet& UnitMomentum() const;
+}
+
+
+class EnergyShare : public fastjet::UserInfoBase
+{
+	public: 
+		const unsigned int motherIndex; // This is the safest option, in case the vector containing the mother grows
+		const Double_t share;
+		
+	EnergyShare(const unsigned int motherIndex_in, const Double_t share_in):
+		mother(mother_in), share(share_in)
+	{}
+};
+
+
 const Double_t PI = acos(-1.);
 
 //------------------------------------------------------------------------------
@@ -89,7 +125,8 @@ void HighPtBTagger::Init()
 	fItJetInputArray = fJetInputArray->MakeIterator();
 	
 	jetsAboveThreshold = 0;
-	jetsWithGoodMuons = 0;
+	jetsWithGoodMuons = 0.;
+	jetsPassedFragmentationCut = 0.;
 	jetsTagged = 0.;
 	invariants.clear();
 }
@@ -112,28 +149,47 @@ void HighPtBTagger::Finish()
 		cout << "}\n\n\n";
 	}
 	
+	cout << "cut 1 (rel): muon pt........." << jetsWithGoodMuons / jetsAboveThreshold << "\n";
+	cout << "cut 2 (rel): fragmentation..." << jetsPassedFragmentationCut / jetsWithGoodMuons << "\n";
+	cout << "cut 3 (rel): CMinvariant....." << jetsTagged/jetsPassedFragmentationCut << "\n";
+	cout << "Absolute efficiency.........." << jetsTagged/jetsAboveThreshold << "\n\n";
+	
 	delete fJetDefinition;
 	delete fItJetInputArray;
 }
 
 //------------------------------------------------------------------------------
 
+
+// Need an easy way to keep track of how much energy is still kept by the tower
+// If share == 1, let 
+
+// share = cellEnergy / eCalEnergy
 void HighPtBTagger::Process()
 {
-	vector<fastjet::PseudoJet> inputList;
-	
 	// loop over input jets
 	Candidate* jet;
 	fItJetInputArray->Reset();
 	
 	stringstream debugOut;
 	
-	const int granularity = 4; // granularity of ATLAS middle sample, 4x4 ECAL cells per HCAL cell
-	const Double_t eCalThreshold = 20.;
-	const Double_t eCalRadiusFactor = .5;
-	const Double_t invariantScaleFactor = 2./3.;
+	const int cellGranularity = 4;
+	 // granularity of ATLAS middle sample, 4x4 ECAL cells per HCAL cell
+	const Double_t	clusterGranularity = .5*cellGranularity;
+	const bool masslessClusters = false;
+	const Double_t
+		minTowerPtRatio = 1e-2,
+		
+		eCalCellThreshold = 1.,
+		eCalClusterThreshold = 20.,
+		
+		cellToClusterR =  fCoreAntiktR / clusterGranularity,
+		
+		suckInStandaloneR = 1.5*fCoreAntiktR,
+		
+		invariantScaleFactor = 1.;
 	
-	const fastjet::JetDefinition eCalJetDefinition(fastjet::antikt_algorithm, fCoreAntiktR * eCalRadiusFactor);
+	const fastjet::JetDefinition cellToClusterJetDefinition(fastjet::antikt_algorithm, cellToClusterR);
 		
 	while((jet = static_cast<Candidate*>(fItJetInputArray->Next())))
 	{
@@ -146,12 +202,13 @@ void HighPtBTagger::Process()
 		if(jetPt >= fMinJetPt) // Ensure the jet is above the pt cut
 		{
 			++jetsAboveThreshold;
+			
 			debugOut << "pt/eta/phi:         " << jetPt << "\t| " << (jet->Momentum).Eta() << "\t| " << (jet->Momentum).Phi() << endl;
 		
 			TObjArray const* const jetConstituents = jet->GetCandidates();
 			TIterator* const itJetConstituents = jetConstituents->MakeIterator();
-			std::vector<Candidate const*> goodMuons;
 			
+			std::vector<Candidate const*> goodMuons;
 			// Find all muons that pass the pt cuts
 			{
 				Candidate const* constituent;
@@ -173,26 +230,24 @@ void HighPtBTagger::Process()
 				// at least one pi0, and that this energy will get boosted into significant
 				// energy deposits in the ECAL. Thus, ECAL hits can be used for pointing 
 				// information for all the energy of the tower.
-				// Initialy, this algorithm was implemented on a cell-by-cell basis, 
-				// using each tower's ECAL hits to direct it's HCAL energy.
-				// In the second iteration, we will allow the ECAL energy from 
-				// neighboring towers to cluster. This ECAL energy will then pull HCAL
-				// energy along with it (in an amount proportional to its ECAL propotion 
-				// in the tower).
-				// To reduce noise, we will require the energy in an ECAL cell to 
-				// exceed a given threshold before it can participate in the clustering.
-								
-				std::vector<ECalTower> eCalTowers;
-				std::vector<Candidate const*> standaloneHCalTowers;
+				
+				std::vector<PseudoJet> eCalCells;
+				std::vector<MotherTower> motherTowers;
+				
+				// Step1: Turn ECAL cells into PseudoJets
 				{
-					Candidate* tower;			
+					// Loop through all towers in jet
+					Candidate* tower;	
 					
 					itJetConstituents->Reset();
 					while((tower = static_cast<Candidate*>(itJetConstituents->Next())))
 					{
-						// Make sure it has meaningful energy and is not a track
-						if(((tower->Momentum).Pt() >= .01*jetPt) and (tower->Charge == 0))
+						// Make sure its a tower (not a track) with meaningful energy
+						if(((tower->Momentum).Pt() >= minTowerPtRatio*jetPt) and (tower->Charge == 0))
 						{
+							// Step1A: Bin ECal energy into ECal cells. Eventually, this step 
+							//         should be moved to the Calorimeter module
+							{
 							// Find the edges of the tower (HCAL cell)
 							const Double_t
 								etaMin = tower->Edges[0],
@@ -214,146 +269,192 @@ void HighPtBTagger::Process()
 								for(int phi = 0; phi < granularity; ++phi)
 									eCalGrid[eta][phi] = 0.;
 							
-							// Prepare to loop through the tower's constituents
-							TIterator* fItTowerConstituents = (tower->GetCandidates())->MakeIterator();
-							Candidate const* towerConstituent;
+							// Loop through the tower's constituents and bin energy
+							{
+								TIterator* fItTowerConstituents = (tower->GetCandidates())->MakeIterator();
+								Candidate const* towerConstituent;
 													
-							// Loop over all particles and bin them into ECAL grids
-							while((towerConstituent = static_cast<Candidate*>(fItTowerConstituents->Next())))
-							{
-								const int absID = abs(towerConstituent->PID);
-								
-								if((absID == 11) or (absID == 22)) // electrons and photons
+								// Loop over all particles and bin them into ECAL grids
+								while((towerConstituent = static_cast<Candidate*>(fItTowerConstituents->Next())))
 								{
-									// Cal eta/phi depends on position, not momentum
-									const TLorentzVector& thisPosition = towerConstituent->Position;
-									const int 
-										thisEtaIndex = int((thisPosition.Eta() - etaMin)/etaWidth),
-										thisPhiIndex = int((thisPosition.Phi() - phiMin)/phiWidth);
+									const int absID = abs(towerConstituent->PID);
 								
-									eCalGrid[thisEtaIndex][thisPhiIndex] += (towerConstituent->Momentum).E();
-									
-									if(absID == 11)
-										debugOut << "Electron:           " << (towerConstituent->Momentum).E() << "\n";
-								}
-							}
-						
-							TLorentzVector eCalMomentum;
-							Double_t qualifyingEnergy = 0.;
-							const unsigned int firstETowerIndex = eCalTowers.size();
-						
-							// Now loop over all ECAL grids and, if they are above the 
-							// energy threshold, creat an ECalTower
-							for(int eta = 0; eta < granularity; ++eta)
-							{
-								for(int phi = 0; phi < granularity; ++phi)
-								{
-									const Double_t eCalEnergy = eCalGrid[eta][phi];
-									
-									if(eCalEnergy >= eCalThreshold)
+									if((absID == 11) or (absID == 22)) // electrons and photons
 									{
-										const Double_t newEta = etaMin + (0.5 + eta)*etaWidth;
-										eCalMomentum.SetPtEtaPhiM(eCalEnergy/cosh(newEta), newEta, phiMin + (0.5 + phi)*phiWidth, 0.);
-										eCalTowers.emplace_back(eCalMomentum, eCalEnergy*(tower->Ehad));
-										qualifyingEnergy += eCalEnergy;
+										// Cal eta/phi depends on position, not momentum
+										const TLorentzVector& thisPosition = towerConstituent->Position;
+										const int 
+											thisEtaIndex = int((thisPosition.Eta() - etaMin)/etaWidth),
+											thisPhiIndex = int((thisPosition.Phi() - phiMin)/phiWidth);
+								
+										eCalGrid[thisEtaIndex][thisPhiIndex] += (towerConstituent->Momentum).E();
+																		
+										//if(absID == 11)
+										//	debugOut << "Electron:           " << (towerConstituent->Momentum).E() << "\n";
 									}
 								}
+							
+								delete fItTowerConstituents;
 							}
 							
-							const unsigned int pastLastETowerIndex = eCalTowers.size();
+							// Step1B: Create a MotherTower
+							const unsigned int motherTowerIndex = motherTowers.size();
+							motherTowers.emplace_back(tower->Momentum, tower->Eem, tower->Ehad);
 							
-							if(pastLastETowerIndex == firstETowerIndex)
+							// Step1C: Loop over all ECAL cells and turn them into PseudoJets
 							{
-								standaloneHCalTowers.push_back(tower);
-								debugOut << "Standalone:         " << tower->Momentum.E() << "\n";
-							}
-							else
-							{
-								// Now loop over any newly created ECalTowers and scale their hCalEnergy by 
-								// the amount of ECalEnergy that qualified
-								for(unsigned int eTowerIndex = firstETowerIndex; eTowerIndex < pastLastETowerIndex; ++eTowerIndex)
-									eCalTowers[eTowerIndex].hCalEnergy /= qualifyingEnergy;
-								debugOut << "EM pointed:         " << "{ " << tower->Eem << " , " << tower->Ehad << " }\n";
-							}
+								//const unsigned int firstETowerIndex = eCalCells.size();
 						
-							delete fItTowerConstituents;
+								TLorentzVector eCalMomentum;
+								Double_t cellEta = etaMin + 0.5 * etaWidth;
+								//Double_t qualifyingEnergy = 0.;
+						
+								for(int eta = 0; eta < granularity; ++eta)
+								{
+									const Double_t coshEta = cosh(cellEta);
+									Double_t cellPhi = phiMin + 0.5 * phiWidth;
+								
+									for(int phi = 0; phi < granularity; ++phi)
+									{
+										const Double_t cellEnergy = eCalGrid[eta][phi];
+									
+										if(cellEnergy >= eCalCellThreshold)
+										{
+											const Double_t myShare = cellEnergy / tower->Eem;
+											
+											eCalMomentum.SetPtEtaPhiM(cellEnergy/coshEta, cellEta, cellPhi, 0.);
+											eCalCells.emplace_back(eCalMomentum.Px(), eCalMomentum.Py(), eCalMomentum.Pz(), eCalMomentum.E());
+											eCalCells.back().set_user_info(new EnergyShare(motherTowerIndex, myShare));
+											motherTowers.back().remainingShare -= myShare;
+										}										
+										cellPhi += phiWidth;
+									}
+									cellEta += etaWidth;
+								}
+							
+								//const unsigned int pastLastETowerIndex = eCalCells.size();
+								/*
+								if(pastLastETowerIndex == firstETowerIndex)
+								{
+									// There was no ECal energy above threshold in this tower
+									standaloneTowers.emplace_back((tower->Momentum).Px(), (tower->Momentum).Py(), (tower->Momentum).Pz(), (tower->Momentum).E());
+									standalone.back().set_user_info(new HCalEnergy(tower->Ehad));
+								}
+								else
+								{
+									// Now loop over any newly created ECalTowers and scale their hCalEnergy by 
+									// the amount of ECalEnergy that qualified
+									for(unsigned int eTowerIndex = firstETowerIndex; eTowerIndex < pastLastETowerIndex; ++eTowerIndex)
+										(static_cast<HCalEnergy*>(eCalCells[eTowerIndex].user_info_shared_ptr().get())->hCalEnergy) /= qualifyingEnergy;
+										//debugOut << "EM pointed:         " << "{ " << tower->Eem << " , " << tower->Ehad << " }\n";
+								}
+								*/
+							}
 						}
 					}
 				}
 				
-				{
-					inputList.clear();
-					int numConstituents = 0;
-	
-					// Now feed all ECalTowers into fastjet
-					for(std::vector<ECalTower>::const_iterator itETower = eCalTowers.begin(); itETower not_eq eCalTowers.end(); ++itETower)
-					{
-						const TLorentzVector& eTowerP4 = itETower->eCalMomentum;
-						
-						inputList.emplace_back(eTowerP4.Px(), eTowerP4.Py(), eTowerP4.Pz(), eTowerP4.E());						
-						inputList.back().set_user_index( numConstituents++ );
-					}
-				}
+				std::vector<PseudoJet>
 				
-				{	
-					// Now cluster the ECalTowers
-					fastjet::ClusterSequence clusterSequence(inputList, eCalJetDefinition);
-					std::vector<fastjet::PseudoJet> outputList = fastjet::sorted_by_pt(clusterSequence.inclusive_jets(0.));
+				// Step2: Simulate the clustering of ECal cell energy into local clusters
+				//        This does not simulate the energy sharing between towers, 
+				//        but should reduce to an RMS approximation of ECal cluster positions.
+				{
+					{	// Cluster the cells						
+						fastjet::ClusterSequence eCalCellClusterer(eCalCells, cellToClusterJetDefinition);
+						std::vector<fastjet::PseudoJet> eCalClusters = eCalCellClusterer.inclusive_jets(0.);
 					
-					if(not outputList.empty())
-						debugOut << "highest energy EM: " << outputList.front().E() << "\n";
-					
-					// Now loop through each output jet
-					for(std::vector<fastjet::PseudoJet>::iterator itOutJet = outputList.begin(); itOutJet not_eq outputList.end(); ++itOutJet)
-					{
-						// Find its constituents
-						std::vector<fastjet::PseudoJet> inJet = clusterSequence.constituents(*itOutJet);
+						//if(not outputList.empty())
+							//debugOut << "highest energy EM: " << outputList.front().E() << "\n";
+							
+						// Now loop through the clusters and check their energy
+						for(std::vector<fastjet::PseudoJet>::iterator itCluster = eCalClusters.begin(); itCluster not_eq eCalClusters.end(); ++itCluster)
+						{
+							// Find the cluster's constituents
+							std::vector<fastjet::PseudoJet> cellsInCluster = clusterSequence.constituents(*itCluster);
 						
-						Double_t hCalAddition = 0.;
-						// Now loop through those constituents and add up all the HCalEnergy we need to add
-						for(std::vector<fastjet::PseudoJet>::const_iterator itInJet = inJet.begin(); itInJet not_eq inJet.end(); ++itInJet)
-							hCalAddition += eCalTowers[itInJet->user_index()].hCalEnergy;
+							if(itCluster->E() < eCalClusterThreshold)
+							{
+								// Any cluster below threshold needs its cells to return their energy share back to the mother tower.
+								for(std::vector<fastjet::PseudoJet>::const_iterator itCells = cellsInCluster.begin(); itCells not_eq cellsInCluster.end(); ++itCells)
+								{
+									EnergyShare const* myEnergyShare = static_cast<EnergyShare*>((itCells->user_info_shared_ptr()).get());
+									motherTowers[myEnergyShare->motherIndex].remainingShare += myEnergyShare->share;
+								}
+							}
+							else
+							{
+								Double_t hCalAddition = 0.;
+								
+								// Clusters above threshold need their collective HCAL energy to be added in.
+								for(std::vector<fastjet::PseudoJet>::const_iterator itCells = cellsInCluster.begin(); itCells not_eq cellsInCluster.end(); ++itCells)
+								{
+									EnergyShare const* myEnergyShare = static_cast<EnergyShare*>((itCells->user_info_shared_ptr()).get());
+									hCalAddition += myEnergyShare->share * motherTowers[myEnergyShare->motherIndex].hCalEnergy;
+								}
+								
+								// Now scale the 4-vectors to account for the new HCAL energy
+								if(masslessClusters)
+								{
+									const Double_t 
+										p3Mag = sqrt(itCells->modp2()),
+										newEnergy = itCells->E() + hCalAddition;
+									itCells->reset_momentum(itCells->px/p3Mag, itCells->py/p3Mag, itCells->pz/p3Mag, 1.);
+									itCells->operator*=(newEnergy);
+								}
+								else
+								{
+									newScale = (1. + hCalAddition/itCells->E());
+									itCells->operator*=(newScale);
+								}
+								
+								
+							}
+						}
+							
+							
+							
+							
 						
-						// Now scale the 4-vectors to bring their HCAL energy along with them
-						// We'll do this by discarding any aqcuired mass and use the momentum
-						// as a massless 4-vector
+							
+							// Now loop through those constituents and add up all the HCalEnergy we need to add
+							for(std::vector<fastjet::PseudoJet>::const_iterator itInJet = inJet.begin(); itInJet not_eq inJet.end(); ++itInJet)
+								hCalAddition += eCalTowers[itInJet->user_index()].hCalEnergy;
 						
-						const Double_t p3Mag = sqrt(itOutJet->modp2());
-						const Double_t newScale = (1. + hCalAddition/p3Mag);
-						itOutJet->reset_momentum(itOutJet->px()*newScale, itOutJet->py()*newScale, itOutJet->pz()*newScale, p3Mag*newScale);						
-					}
+													
+						}
 					
-					// Now clear the inputlist and re-fill it
-					inputList.clear();
-					int numConstituents = 0;
-					// Start with the muons, so that their user_index is easy to find (less than goodMuons.size())
-					for(std::vector<Candidate const*>::const_iterator itMuons = goodMuons.begin(); itMuons not_eq goodMuons.end(); ++itMuons)
-					{
-						const TLorentzVector& thisMuon = (*itMuons)->Momentum;
-						inputList.emplace_back(thisMuon.Px(), thisMuon.Py(), thisMuon.Pz(), thisMuon.E());
-						inputList.back().set_user_index( numConstituents++ );
-					}
-					debugOut << "good muons:         " << goodMuons.size() << "\n";
+						// Now clear the inputlist and re-fill it
+						inputList.clear();
+						int numConstituents = 0;
+						// Start with the muons, so that their user_index is easy to find (less than goodMuons.size())
+						for(std::vector<Candidate const*>::const_iterator itMuons = goodMuons.begin(); itMuons not_eq goodMuons.end(); ++itMuons)
+						{
+							const TLorentzVector& thisMuon = (*itMuons)->Momentum;
+							inputList.emplace_back(thisMuon.Px(), thisMuon.Py(), thisMuon.Pz(), thisMuon.E());
+							inputList.back().set_user_index( numConstituents++ );
+						}
+						debugOut << "good muons:         " << goodMuons.size() << "\n";
 					
-					// Now add the ECAL directed HCAL towers
-					for(std::vector<fastjet::PseudoJet>::const_iterator itOutJet = outputList.begin(); itOutJet not_eq outputList.end(); ++itOutJet)
-					{
-						inputList.emplace_back(itOutJet->px(), itOutJet->py(), itOutJet->pz(), itOutJet->E());
-						inputList.back().set_user_index( numConstituents++ );
-					}
-					debugOut << "ECAL jets:          " << outputList.size() << "\n";
+						// Now add the ECAL directed HCAL towers
+						for(std::vector<fastjet::PseudoJet>::const_iterator itOutJet = outputList.begin(); itOutJet not_eq outputList.end(); ++itOutJet)
+						{
+							inputList.emplace_back(itOutJet->px(), itOutJet->py(), itOutJet->pz(), itOutJet->E());
+							inputList.back().set_user_index( numConstituents++ );
+						}
+						debugOut << "ECAL jets:          " << outputList.size() << "\n";
 					
-					// Don't add standalone HCAL towers (using the center of the tower)
-					/*
-					for(std::vector<Candidate const*>::const_iterator itStandalone = standaloneHCalTowers.begin(); itStandalone not_eq standaloneHCalTowers.end(); ++itStandalone)
-					{
-						const TLorentzVector& thisTower = (*itStandalone)->Momentum;
-						inputList.emplace_back(thisTower.Px(), thisTower.Py(), thisTower.Pz(), thisTower.E());
-						inputList.back().set_user_index( numConstituents++ );
+						// Don't add standalone HCAL towers (using the center of the tower)
+						/*
+						for(std::vector<Candidate const*>::const_iterator itStandalone = standaloneHCalTowers.begin(); itStandalone not_eq standaloneHCalTowers.end(); ++itStandalone)
+						{
+							const TLorentzVector& thisTower = (*itStandalone)->Momentum;
+							inputList.emplace_back(thisTower.Px(), thisTower.Py(), thisTower.Pz(), thisTower.E());
+							inputList.back().set_user_index( numConstituents++ );
+						}
+						*/
+						debugOut << "standalone HCAL:    " << standaloneHCalTowers.size() << "\n";
 					}
-					*/
-					debugOut << "standalone HCAL:    " << standaloneHCalTowers.size() << "\n";
-				}
 				
 				// Now cluster the new list
 				fastjet::ClusterSequence clusterSequence(inputList, *fJetDefinition);
@@ -361,6 +462,8 @@ void HighPtBTagger::Process()
 				
 				if(not outputList.empty()) // Make sure at least one subjet passed the pt cut
 				{
+					++jetsPassedFragmentationCut;
+				
 					fastjet::PseudoJet coreCopy = outputList.front(); // The highest pt jet is the core
 										
 					debugOut << "core Pt:            " << sqrt(coreCopy.kt2()) << endl;
@@ -447,9 +550,7 @@ void HighPtBTagger::Process()
 						invariants.push_back(CMInvariant);
 						
 					}// End loop over muons
-					debugOut << "w/goodMuon efficiency...." << jetsTagged/jetsWithGoodMuons << "\n";
-					debugOut << "Total efficiency........." << jetsTagged/jetsAboveThreshold << "\n\n"; 
-					
+									
 					cout << debugOut.str();
 					cout << "\n---------------------------------------------------------\n";				
 				}// End core pt cut					
@@ -459,11 +560,6 @@ void HighPtBTagger::Process()
 		}//End jet pt cut  	
 	}//End loop over jets
 }
-
-//------------------------------------------------------------------------------
-
-ECalTower::ECalTower(const TLorentzVector& eCalMomentum_in, const Double_t hCalEnergy_in):
-	eCalMomentum(eCalMomentum_in), hCalEnergy(hCalEnergy_in) {}
 
 //------------------------------------------------------------------------------
 
