@@ -158,6 +158,7 @@ void Calorimeter::Init()
 
   // switch on or off the dithering of the center of calorimeter towers
   fSmearTowerCenter = GetBool("SmearTowerCenter", true);
+  fFindCalPhotons = GetBool("FindCalPhotons", true);
 
   // read resolution formulas
   fECalResolutionFormula->Compile(GetString("ECalResolutionFormula", "0"));
@@ -480,7 +481,7 @@ void Calorimeter::FinalizeTower()
 
   if(energy > 0.0)
   {
-    if(fTowerPhotonHits > 0 && fTowerTrackHits == 0)
+    if(fFindCalPhotons && fTowerPhotonHits > 0 && fTowerTrackHits == 0)
     {
       fPhotonOutputArray->Add(fTower);
     }

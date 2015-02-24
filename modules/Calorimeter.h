@@ -74,6 +74,7 @@ private:
   Double_t fHCalEnergySignificanceMin;
 
   Bool_t fSmearTowerCenter;
+  Bool_t fFindCalPhotons;
 
   TFractionMap fFractionMap; //!
   TBinMap fBinMap; //!
