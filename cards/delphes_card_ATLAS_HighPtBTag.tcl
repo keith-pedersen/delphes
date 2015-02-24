@@ -177,12 +177,12 @@ module Calorimeter Calorimeter {
   # .025 x .025 towers
   # [-3.175 to 3.2]
   set SquareWidth .025
-  set EtaMin -3.1
+  set EtaMin -3.175
   set EtaMax 3.2
   
   set PhiBins {}
   set HalfNumPhiBins [expr {int(round($pi/$SquareWidth))}]
-  for {set i -$HalfNumPhiBins} {$i <= $HalfNumPhiBins} {incr i} {add PhiBins [expr {$i * $pi/$HalfNumPhiBins/2}] }
+  for {set i -$HalfNumPhiBins} {$i <= $HalfNumPhiBins} {incr i} {add PhiBins [expr {$i * $pi/$HalfNumPhiBins}] }
     
   set EtaBins {}
   set NumEtaBins [expr {int(round(($EtaMax - $EtaMin)/$SquareWidth))}]
@@ -208,7 +208,7 @@ module Calorimeter Calorimeter {
   
   set PhiBins {}
   set HalfNumPhiBins [expr {int(round($pi/$SquareWidth))}]
-  for {set i -$HalfNumPhiBins} {$i <= $HalfNumPhiBins} {incr i} {add PhiBins [expr {$i * $pi/$HalfNumPhiBins/2}] }
+  for {set i -$HalfNumPhiBins} {$i <= $HalfNumPhiBins} {incr i} {add PhiBins [expr {$i * $pi/$HalfNumPhiBins}] }
   
   foreach eta $EtaBins {add EtaPhiBins $eta $PhiBins}
   
