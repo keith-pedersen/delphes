@@ -74,6 +74,11 @@ private:
   Double_t fHCalEnergySignificanceMin;
 
   Bool_t fSmearTowerCenter;
+  
+  Int_t fECalSquareGranularity;
+  Int_t fTowerECalSquareGranularity;
+  Int_t fECalAbsEtaMax;
+  Bool_t fFindCalPhotons;
 
   TFractionMap fFractionMap; //!
   TBinMap fBinMap; //!

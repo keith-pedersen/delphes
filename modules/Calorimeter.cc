@@ -158,6 +158,13 @@ void Calorimeter::Init()
 
   // switch on or off the dithering of the center of calorimeter towers
   fSmearTowerCenter = GetBool("SmearTowerCenter", true);
+  
+  fECalSquareGranularity = GetInt("ECalSquareGranularity", 1);
+  fECalAbsEtaMax = abs(GetDouble("ECalAbsEtaMax", 3.2));
+  fFindCalPhotons = GetBool("FindCalPhotons", true);
+  
+  if(fECalSquareGranularity > Candidate::MaxECalSquareGranularity)
+    throw runtime_error("Calorimeter cannot support ECal square granularity larger than specified in Candidate::MaxECalSquareGranularity!");
 
   // read resolution formulas
   fECalResolutionFormula->Compile(GetString("ECalResolutionFormula", "0"));
@@ -199,7 +206,7 @@ void Calorimeter::Process()
   Candidate *particle, *track;
   TLorentzVector position, momentum;
   Short_t etaBin, phiBin, flags;
-  Int_t number;
+  Int_t number, eCalBin;
   Long64_t towerHit, towerEtaPhi, hitEtaPhi;
   Double_t ecalFraction, hcalFraction;
   Double_t ecalEnergy, hcalEnergy;
@@ -219,6 +226,12 @@ void Calorimeter::Process()
   fTowerHCalFractions.clear();
   fTrackECalFractions.clear();
   fTrackHCalFractions.clear();
+  
+  // Current status of "flags"
+  // bit 0:   1 = track (0 = particle)
+  // bit 1:   1 = photon/electron-like shower (0 = not)
+  // bit 2:   unused
+  // bit 3:   unused
 
   // loop over all particles
   fItParticleInputArray->Reset();
@@ -226,7 +239,8 @@ void Calorimeter::Process()
   while((particle = static_cast<Candidate*>(fItParticleInputArray->Next())))
   {
     const TLorentzVector &particlePosition = particle->Position;
-    ++number;
+    if(++number > 0x0000000000FFFFFFLL) // Pedantic safety valve
+      throw runtime_error("Candidate::Process/particle, Too many particles for towerHit bit-flag scheme!");
 
     pdgCode = TMath::Abs(particle->PID);
 
@@ -244,24 +258,43 @@ void Calorimeter::Process()
 
     if(ecalFraction < 1.0E-9 && hcalFraction < 1.0E-9) continue;
 
-    // find eta bin [1, fEtaBins.size - 1]
-    itEtaBin = lower_bound(fEtaBins.begin(), fEtaBins.end(), particlePosition.Eta());
+    // find the index of the towers' upper eta boundary [1, fEtaBins.size - 1]
+    const Double_t particleEta = particlePosition.Eta();
+    itEtaBin = lower_bound(fEtaBins.begin(), fEtaBins.end(), particleEta);
     if(itEtaBin == fEtaBins.begin() || itEtaBin == fEtaBins.end()) continue;
     etaBin = distance(fEtaBins.begin(), itEtaBin);
-
+    
     // phi bins for given eta bin
     phiBins = fPhiBins[etaBin];
 
-    // find phi bin [1, phiBins.size - 1]
-    itPhiBin = lower_bound(phiBins->begin(), phiBins->end(), particlePosition.Phi());
+    // find the index of the towers' upper phi boundary [1, phiBins.size - 1]
+    const Double_t particlePhi = particlePosition.Phi();
+    itPhiBin = lower_bound(phiBins->begin(), phiBins->end(), particlePhi);
     if(itPhiBin == phiBins->begin() || itPhiBin == phiBins->end()) continue;
     phiBin = distance(phiBins->begin(), itPhiBin);
-
+    
     flags = 0;
-    flags |= (pdgCode == 11 || pdgCode == 22) << 1;
+    flags |= (pdgCode == 11 || pdgCode == 22) << 1; // Set EM shower flag
+    
+    if((fECalSquareGranularity > 1) && (abs(particleEta) <= fECalAbsEtaMax))
+    {
+      {
+		 	const Double_t towerEtaMin = *(itEtaBin - 1);
+		 	// eCalBin is a 2D, W x W array packed linearly: bin = etaIndex * W + phiIndex
+		 	eCalBin = Int_t((particleEta - towerEtaMin)/(*itEtaBin - towerEtaMin)*fECalSquareGranularity)*fECalSquareGranularity;
+		}
+      
+      {
+		  const Double_t towerPhiMin = *(itPhiBin - 1);
+		  eCalBin += Int_t((particlePhi - towerPhiMin)/(*itPhiBin - towerPhiMin)*fECalSquareGranularity);
+		}
+    }
+    else
+    	eCalBin = 0;
 
-    // make tower hit {16-bits for eta bin number, 16-bits for phi bin number, 8-bits for flags, 24-bits for particle number}
-    towerHit = (Long64_t(etaBin) << 48) | (Long64_t(phiBin) << 32) | (Long64_t(flags) << 24) | Long64_t(number);
+    // make tower hit {16-bits for eta bin number, 16-bits for phi bin number
+    // 4-bits for ECalCell number, 4-bits for flags, 24-bits for particle number}
+    towerHit = (Long64_t(etaBin) << 48) | (Long64_t(phiBin) << 32) | (Long64_t(eCalBin)  << 28) | (Long64_t(flags) << 24) | Long64_t(number);
 
     fTowerHits.push_back(towerHit);
   }
@@ -272,7 +305,8 @@ void Calorimeter::Process()
   while((track = static_cast<Candidate*>(fItTrackInputArray->Next())))
   {
     const TLorentzVector &trackPosition = track->Position;
-    ++number;
+    if(++number > 0x0000000000FFFFFFLL) // Pedantic safety valve
+      throw runtime_error("Candidate::Process/track, Too many particles for towerHit bit scheme!");
 
     pdgCode = TMath::Abs(track->PID);
 
@@ -288,22 +322,24 @@ void Calorimeter::Process()
     fTrackECalFractions.push_back(ecalFraction);
     fTrackHCalFractions.push_back(hcalFraction);
 
-    // find eta bin [1, fEtaBins.size - 1]
+    // find the index of the upper eta boundary [1, fEtaBins.size - 1]
     itEtaBin = lower_bound(fEtaBins.begin(), fEtaBins.end(), trackPosition.Eta());
     if(itEtaBin == fEtaBins.begin() || itEtaBin == fEtaBins.end()) continue;
     etaBin = distance(fEtaBins.begin(), itEtaBin);
-
+    
     // phi bins for given eta bin
     phiBins = fPhiBins[etaBin];
 
-    // find phi bin [1, phiBins.size - 1]
+    // find the index of the towers' upper phi boundary [1, phiBins.size - 1]
     itPhiBin = lower_bound(phiBins->begin(), phiBins->end(), trackPosition.Phi());
     if(itPhiBin == phiBins->begin() || itPhiBin == phiBins->end()) continue;
     phiBin = distance(phiBins->begin(), itPhiBin);
 
     flags = 1;
-
-    // make tower hit {16-bits for eta bin number, 16-bits for phi bin number, 8-bits for flags, 24-bits for track number}
+    
+    // make tower hit {16-bits for eta bin number, 16-bits for phi bin number
+    // 4-bits for ECalBin number, 4-bits for flags, 24-bits for particle number}
+    // Currently, the ECalBin is not supported for tracks (EFlowPhotons do not have enhanced granularity)
     towerHit = (Long64_t(etaBin) << 48) | (Long64_t(phiBin) << 32) | (Long64_t(flags) << 24) | Long64_t(number);
 
     fTowerHits.push_back(towerHit);
@@ -319,7 +355,8 @@ void Calorimeter::Process()
   for(itTowerHits = fTowerHits.begin(); itTowerHits != fTowerHits.end(); ++itTowerHits)
   {
     towerHit = (*itTowerHits);
-    flags = (towerHit >> 24) & 0x00000000000000FFLL;
+    eCalBin = (towerHit >> 28) & 0x000000000000000FLL;
+    flags = (towerHit >> 24) & 0x000000000000000FLL;
     number = (towerHit) & 0x0000000000FFFFFFLL;
     hitEtaPhi = towerHit >> 32;
 
@@ -348,6 +385,11 @@ void Calorimeter::Process()
       fTowerEdges[1] = fEtaBins[etaBin];
       fTowerEdges[2] = (*phiBins)[phiBin - 1];
       fTowerEdges[3] = (*phiBins)[phiBin];
+      
+      if((fTowerEdges[1] <= -fECalAbsEtaMax) || (fTowerEdges[0] >= fECalAbsEtaMax))
+        fTowerECalSquareGranularity = 0;
+      else
+        fTowerECalSquareGranularity = fECalSquareGranularity;
 
       fTowerECalEnergy = 0.0;
       fTowerHCalEnergy = 0.0;
@@ -382,14 +424,21 @@ void Calorimeter::Process()
 
       ecalEnergy = momentum.E() * fTrackECalFractions[number];
       hcalEnergy = momentum.E() * fTrackHCalFractions[number];
-
-      fTrackECalEnergy += ecalEnergy;
+      
+      // If there is no ECAL left, move all ECAL energy to the HCAL
+      if(fTowerECalSquareGranularity == 0)
+      {
+        hcalEnergy += ecalEnergy;        
+      }
+      else
+      {
+        fTrackECalEnergy += ecalEnergy;
+        fTrackECalTime += TMath::Sqrt(ecalEnergy)*position.T();
+        fTrackECalTimeWeight += TMath::Sqrt(ecalEnergy);
+      }
+      
       fTrackHCalEnergy += hcalEnergy;
-
-      fTrackECalTime += TMath::Sqrt(ecalEnergy)*position.T();
       fTrackHCalTime += TMath::Sqrt(hcalEnergy)*position.T();
-
-      fTrackECalTimeWeight += TMath::Sqrt(ecalEnergy);
       fTrackHCalTimeWeight += TMath::Sqrt(hcalEnergy);
 
       fTowerTrackArray->Add(track);
@@ -407,16 +456,23 @@ void Calorimeter::Process()
     // fill current tower
     ecalEnergy = momentum.E() * fTowerECalFractions[number];
     hcalEnergy = momentum.E() * fTowerHCalFractions[number];
+    
+    // If there is no ECAL left, move all ECAL energy to the HCAL
+    if(fTowerECalSquareGranularity == 0)
+    {
+      hcalEnergy += ecalEnergy;
+    }
+    else
+    {
+      // When fECalSquareGranularity=1, all energy is sent to the first bin by default
+    	fTower->ECalCells[eCalBin] += ecalEnergy;
+      fTowerECalTime += TMath::Sqrt(ecalEnergy)*position.T();
+      fTowerECalTimeWeight += TMath::Sqrt(ecalEnergy);
+    }
 
-    fTowerECalEnergy += ecalEnergy;
     fTowerHCalEnergy += hcalEnergy;
-
-    fTowerECalTime += TMath::Sqrt(ecalEnergy)*position.T();
     fTowerHCalTime += TMath::Sqrt(hcalEnergy)*position.T();
-
-    fTowerECalTimeWeight += TMath::Sqrt(ecalEnergy);
     fTowerHCalTimeWeight += TMath::Sqrt(hcalEnergy);
-
 
     fTower->AddCandidate(particle);
   }
@@ -431,27 +487,35 @@ void Calorimeter::FinalizeTower()
 {
   Candidate *track, *tower;
   Double_t energy, pt, eta, phi;
-  Double_t ecalEnergy, hcalEnergy;
+  Double_t ecalEnergy, ecalCellEnergy, hcalEnergy;
   Double_t ecalSigma, hcalSigma;
   Double_t ecalTime, hcalTime, time;
-
+  
   if(!fTower) return;
 
-  ecalSigma = fECalResolutionFormula->Eval(0.0, fTowerEta, 0.0, fTowerECalEnergy);
   hcalSigma = fHCalResolutionFormula->Eval(0.0, fTowerEta, 0.0, fTowerHCalEnergy);
-
-  ecalEnergy = LogNormal(fTowerECalEnergy, ecalSigma);
+  
+  ecalEnergy = 0.;
   hcalEnergy = LogNormal(fTowerHCalEnergy, hcalSigma);
+  
+  if(hcalEnergy < fHCalEnergyMin || hcalEnergy < fHCalEnergySignificanceMin*hcalSigma) hcalEnergy = 0.0;
 
   ecalTime = (fTowerECalTimeWeight < 1.0E-09 ) ? 0.0 : fTowerECalTime/fTowerECalTimeWeight;
   hcalTime = (fTowerHCalTimeWeight < 1.0E-09 ) ? 0.0 : fTowerHCalTime/fTowerHCalTimeWeight;
-
-  ecalSigma = fECalResolutionFormula->Eval(0.0, fTowerEta, 0.0, ecalEnergy);
-  hcalSigma = fHCalResolutionFormula->Eval(0.0, fTowerEta, 0.0, hcalEnergy);
-
-  if(ecalEnergy < fECalEnergyMin || ecalEnergy < fECalEnergySignificanceMin*ecalSigma) ecalEnergy = 0.0;
-  if(hcalEnergy < fHCalEnergyMin || hcalEnergy < fHCalEnergySignificanceMin*hcalSigma) hcalEnergy = 0.0;
-
+  
+  {
+    Float_t* const pastLastECell = fTower->ECalCells + fTowerECalSquareGranularity*fTowerECalSquareGranularity;
+    for(Float_t* eCell = fTower->ECalCells; eCell < pastLastECell; ++eCell)
+    {
+      ecalCellEnergy = *eCell;
+      ecalSigma = fECalResolutionFormula->Eval(0.0, fTowerEta, 0.0, ecalCellEnergy);
+      ecalCellEnergy = LogNormal(ecalCellEnergy, ecalSigma);
+      if(ecalCellEnergy < fECalEnergyMin || ecalCellEnergy < fECalEnergySignificanceMin*ecalSigma) ecalCellEnergy = 0.0;
+      *eCell = ecalCellEnergy;
+      ecalEnergy += ecalCellEnergy;
+    }
+  }
+  
   energy = ecalEnergy + hcalEnergy;
   time = (TMath::Sqrt(ecalEnergy)*ecalTime + TMath::Sqrt(hcalEnergy)*hcalTime)/(TMath::Sqrt(ecalEnergy) + TMath::Sqrt(hcalEnergy));
 
@@ -472,6 +536,7 @@ void Calorimeter::FinalizeTower()
   fTower->Momentum.SetPtEtaPhiE(pt, eta, phi, energy);
   fTower->Eem = ecalEnergy;
   fTower->Ehad = hcalEnergy;
+  fTower->ECalSquareGranularity = fTowerECalSquareGranularity;
 
   fTower->Edges[0] = fTowerEdges[0];
   fTower->Edges[1] = fTowerEdges[1];
@@ -480,7 +545,7 @@ void Calorimeter::FinalizeTower()
 
   if(energy > 0.0)
   {
-    if(fTowerPhotonHits > 0 && fTowerTrackHits == 0)
+    if(fFindCalPhotons && (fTowerPhotonHits > 0) && (fTowerTrackHits == 0))
     {
       fPhotonOutputArray->Add(fTower);
     }
@@ -506,7 +571,7 @@ void Calorimeter::FinalizeTower()
   if(ecalEnergy < fECalEnergyMin || ecalEnergy < fECalEnergySignificanceMin*ecalSigma) ecalEnergy = 0.0;
   if(hcalEnergy < fHCalEnergyMin || hcalEnergy < fHCalEnergySignificanceMin*hcalSigma) hcalEnergy = 0.0;
 
-  energy = ecalEnergy + hcalEnergy;
+  //energy = ecalEnergy + hcalEnergy;
 
   if(ecalEnergy > 0.0)
   {

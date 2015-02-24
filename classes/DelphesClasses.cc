@@ -32,6 +32,8 @@
 #include "classes/DelphesFactory.h"
 #include "classes/SortableObject.h"
 
+#include <cstring>
+
 CompBase *GenParticle::fgCompare = 0;
 CompBase *Photon::fgCompare = CompPT<Photon>::Instance();
 CompBase *Electron::fgCompare = CompPT<Electron>::Instance();
@@ -122,10 +124,14 @@ TLorentzVector Tower::P4()
 // be initialized to TrackLength_UnprocessedFlag
 const Double_t Candidate::TrackLength_UnprocessedFlag = -1.;
 
+// The ZeroArray must be changed by hand if the max granularity changes
+const Float_t Candidate::ECalCells_ZeroArray[MaxECalCells] = {0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.};
+
 Candidate::Candidate() :
   PID(0), Status(0), M1(-1), M2(-1), D1(-1), D2(-1),
   Charge(0), Mass(0.0),
   CTau(0.0), CreationRadius(0.0), TrackLength(TrackLength_UnprocessedFlag),
+  ECalSquareGranularity(0),
   IsPU(0), IsConstituent(0),
   BTag(0), TauTag(0), Eem(0.0), Ehad(0.0),
   DeltaEta(0.0), DeltaPhi(0.0),
@@ -156,6 +162,8 @@ Candidate::Candidate() :
   Tau[2] = 0.0;
   Tau[3] = 0.0;
   Tau[4] = 0.0;
+  
+  memcpy(ECalCells, ECalCells_ZeroArray, MaxECalCells);
 }
 
 //------------------------------------------------------------------------------
@@ -231,6 +239,10 @@ void Candidate::Copy(TObject &obj) const
   object.CTau = CTau;
   object.CreationRadius = CreationRadius;
   object.TrackLength = TrackLength;
+  object.ECalSquareGranularity = ECalSquareGranularity;
+  
+  memcpy(object.ECalCells, ECalCells, MaxECalCells);
+  
   object.IsPU = IsPU;
   object.IsConstituent = IsConstituent;
   object.BTag = BTag;
@@ -297,6 +309,8 @@ void Candidate::Clear(Option_t* option)
   CTau = 0.0;
   CreationRadius = 0.0;
   TrackLength = TrackLength_UnprocessedFlag;
+  ECalSquareGranularity = 0;
+  memcpy(ECalCells, ECalCells_ZeroArray, MaxECalCells);
   IsPU = 0;
   IsConstituent = 0;
   BTag = 0;

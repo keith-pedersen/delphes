@@ -458,6 +458,15 @@ public:
   Float_t CreationRadius; 
   Float_t TrackLength; // Also a flag! When negative, partice not propagated yet.
   static const Double_t TrackLength_UnprocessedFlag;
+  
+  // <KDP>
+  // An array for storing ECalEnergy in a grid, to simulate the extra 
+  // granularity of the ECal. Keeping it static keeps the memory local.
+  static const Int_t MaxECalSquareGranularity = 4;
+  static const Int_t MaxECalCells = MaxECalSquareGranularity*MaxECalSquareGranularity;
+  static const Float_t ECalCells_ZeroArray[MaxECalCells];
+  Float_t ECalCells[MaxECalCells];
+  Int_t ECalSquareGranularity;
 
   Int_t IsPU;
   Int_t IsConstituent;

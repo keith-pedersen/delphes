@@ -173,14 +173,11 @@ void HighPtBTagger::Process()
 	
 	stringstream debugOut;
 	
-	const int cellGranularity = 4;
-	 // granularity of ATLAS middle sample, 4x4 ECAL cells per HCAL cell
-	const Double_t	clusterGranularity = .5*cellGranularity;
-	const bool masslessClusters = false;
+	const bool masslessECalClusters = false;
 	const Double_t
 		minTowerPtRatio = 1e-2,
 		
-		eCalCellThreshold = 1.,
+		clusterRelativeGranularity = .5,
 		eCalClusterThreshold = 20.,
 		
 		cellToClusterR =  fCoreAntiktR / clusterGranularity,
@@ -196,7 +193,7 @@ void HighPtBTagger::Process()
 		// Reset the output stream 
 		debugOut.str("");
 		debugOut << setprecision(4);
-	
+		
 		const Double_t jetPt = (jet->Momentum).Pt();
 		
 		if(jetPt >= fMinJetPt) // Ensure the jet is above the pt cut
