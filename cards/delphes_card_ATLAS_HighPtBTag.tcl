@@ -10,16 +10,15 @@ set ExecutionPath {
   MuonMomentumSmearing
 
   Calorimeter
+  CalorimeterMerger
   
   TowerJetFinder
   
   JetEnergyScale
 
-  MissingET
+  MissingETandScalarHT
 
   HighPtBTagger
-
-  ScalarHT
 
   TreeWriter
 }
@@ -96,6 +95,8 @@ module Efficiency MuonTrackingEfficiency {
 module MomentumSmearing MuonMomentumSmearing {
   set InputArray MuonTrackingEfficiency/muons
   set OutputArray muons
+  
+  set MassHypothesis .106
 
   # Parameterization of muon pt resolution for STANDALONE muons, based on
   # <https://twiki.cern.ch/twiki/bin/view/AtlasPublic/ApprovedPlotsMuon>
@@ -125,7 +126,7 @@ module MomentumSmearing MuonMomentumSmearing {
                              (abs(eta) > 1.90)                     *   1.0
                            )
                              *
-                           sqrt(pow(.3706 / pt, 2.) + .00185 + pow(.0001809 * pt, 2.)) }
+                           sqrt(pow(.3706 / pt, 2.) + 1.509e-3 + pow(1.809e-4 * pt, 2.)) }
 }
 
 #############
@@ -152,18 +153,14 @@ module Calorimeter Calorimeter {
   set SmearTowerCenter false
   set FindCalPhotons false
   
-  set ECalSquareGranularity 1
-  set ECalAbsEtaMax 3.2
-  set HCalAbsEtaMax 4.9
-  
   set pi [expr {acos(-1)}]
 
   # “add EtaPhiBins singleEta listOfPhi”
-  # Automatically sorted because each add commmand goes to a std::map<eta, set<phi>>
-  # First eta in map is most negative edge of most negative eta bin
-  # Last eta in map is most positive edge of most positive eta bin
-  # Each listOfPhi MUST start with -Pi and end with Pi, otherwise angle will be lost
-  # The phi edges of a given bin determined by the eta of its UPPER EDGE
+  # 1. Automatically sorted because each add commmand goes to a std::map<eta, set<phi>>
+  #    1a. First eta in map is most negative edge of most negative eta bin
+  #    1b. Last eta in map is most positive edge of most positive eta bin
+  # 2. Each listOfPhi MUST start with -Pi and end with Pi, otherwise angle will be lost
+  # 3. The phi edges of a given bin determined by the eta of its UPPER EDGE
   
   # Here I give the HCAL the same segmentation of the ECAL, to use extra pointing
   # information of the ECAL. This is mostly correct, since the ECAL and HCAL distinction 
@@ -172,7 +169,7 @@ module Calorimeter Calorimeter {
   # Most hadrons start showering in the ECAL, and the quoted HCAL resolutions account for this.
   # This method does give too much angular resolution to neutral hadrons (neutrons and K0_L),
   # which infrequently start showering in the ECAL. More importantly, however, it 
-  # applies the HCAL energy resolution to too small a grid. 
+  # applies the HCAL energy resolution to too small a grid.
   
   # .025 x .025 towers
   # [-3.175 to 3.2]
@@ -203,6 +200,7 @@ module Calorimeter Calorimeter {
   
   set EtaMin 3.3
   set EtaMax 4.9
+  
   set NumEtaBins [expr {int(round(($EtaMax - $EtaMin)/$SquareWidth))}]
   for {set i 0} {$i <= $NumEtaBins} {incr i} {add EtaBins [expr {$EtaMin + $i * $SquareWidth}] }
   
@@ -223,18 +221,7 @@ module Calorimeter Calorimeter {
   add EnergyFraction {111} {1.0 0.0}
   # energy fractions for muon
   add EnergyFraction {13} {0.0 0.0}
-  # K0short should be properly decayed/propagated by AllParticlePropagator
-  # If it hits the Cal it's a neutral hadron, don't need a special rule
-  # add EnergyFraction {310} {0.0 1.0}
-  # According to arXiv:0610128, about 80% of pions start showering before the ECAL
-  # Of those that shower inside the ecal, they split their energy about equally
-  # Assume this is the same for all other long-lived charged particles
-  # (and lamba, which will also be properly decayed/propagated by AllParticlePropagator)
-  add EnergyFraction {211} {0.4 0.6}
-  add EnergyFraction {321} {0.4 0.6}
-  add EnergyFraction {2212} {0.4 0.6}  
-  add EnergyFraction {3122} {0.4 0.6}
-  # energy fractions for muon, neutrinos and neutralinos
+  # energy fractions for neutrinos and neutralinos
   add EnergyFraction {12} {0.0 0.0}
   add EnergyFraction {14} {0.0 0.0}
   add EnergyFraction {16} {0.0 0.0}
@@ -243,7 +230,11 @@ module Calorimeter Calorimeter {
   add EnergyFraction {1000025} {0.0 0.0}
   add EnergyFraction {1000035} {0.0 0.0}
   add EnergyFraction {1000045} {0.0 0.0}
-  
+  # K0short and Lambda should be properly decayed/propagated by AllParticlePropagator
+  # If they hit they're a hadron, don't need a special rule
+  # add EnergyFraction {310} {0.3 0.7}
+  # add EnergyFraction {3122} {0.3 0.7}
+
 
   # set ECalResolutionFormula {resolution formula as a function of eta and energy}
   # http://arxiv.org/pdf/physics/0608012v1 jinst8_08_s08003
@@ -260,143 +251,29 @@ module Calorimeter Calorimeter {
                              (abs(eta) > 3.2 && abs(eta) <= 4.9) * sqrt(energy^2*0.09420^2 + energy*1.00^2)}
 }
 
-##########################
-# Track pile-up subtractor
-##########################
-
-module TrackPileUpSubtractor TrackPileUpSubtractor {
-# add InputArray InputArray OutputArray
-  add InputArray Calorimeter/eflowTracks eflowTracks
-  add InputArray ElectronEnergySmearing/electrons electrons
-  add InputArray MuonMomentumSmearing/muons muons
-
-  # assume perfect pile-up subtraction for tracks with |z| > fZVertexResolution
-  # Z vertex resolution in m
-  set ZVertexResolution 0.0001
-}
-
-####################
-# Neutral tower merger
-####################
-
-module Merger NeutralTowerMerger {
-# add InputArray InputArray
-  add InputArray Calorimeter/eflowPhotons
-  add InputArray Calorimeter/eflowNeutralHadrons
-  set OutputArray eflowTowers
-}
-
-##################################
-# Energy flow merger (all tracks)
-##################################
-
-module Merger EFlowMergerAllTracks {
-# add InputArray InputArray
-  add InputArray TrackMerger/tracks
-  add InputArray Calorimeter/eflowPhotons
-  add InputArray Calorimeter/eflowNeutralHadrons
-  set OutputArray eflow
-}
-
-
-####################
-# Energy flow merger
-####################
-
-module Merger EFlowMerger {
-# add InputArray InputArray
-  add InputArray Calorimeter/eflowTracks
-  add InputArray Calorimeter/eflowPhotons
-  add InputArray Calorimeter/eflowNeutralHadrons
-  set OutputArray eflow
-}
-
-#############
-# Rho pile-up
-#############
-
-module FastJetGridMedianEstimator Rho {
-
-  set InputArray Calorimeter/towers
-  set RhoOutputArray rho
-
-  # add GridRange rapmin rapmax drap dphi
-  # rapmin - the minimum rapidity extent of the grid
-  # rapmax - the maximum rapidity extent of the grid
-  # drap - the grid spacing in rapidity
-  # dphi - the grid spacing in azimuth
-
-  add GridRange -5.0 -2.5 1.0 1.0
-  add GridRange -2.5 2.5 0.5 0.5
-  add GridRange 2.5 5.0 1.0 1.0
-
-}
-
-
-#####################
-# Neutrino Filter
-#####################
-
-module PdgCodeFilter NeutrinoFilter {
-
-  set InputArray Delphes/stableParticles
-  set OutputArray filteredParticles
-
-  set PTMin 0.0
-
-  add PdgCode {12}
-  add PdgCode {14}
-  add PdgCode {16}
-  add PdgCode {-12}
-  add PdgCode {-14}
-  add PdgCode {-16}
-
-}
-
-#####################
-# MC truth jet finder
-#####################
-
-module FastJetFinder GenJetFinder {
-  set InputArray NeutrinoFilter/filteredParticles
-
-  set OutputArray jets
-
-  # algorithm: 1 CDFJetClu, 2 MidPoint, 3 SIScone, 4 kt, 5 Cambridge/Aachen, 6 antikt
-  set JetAlgorithm 6
-  set ParameterR 0.6
-
-  set JetPTMin 20.0
+module Merger CalorimeterMerger {
+	add InputArray Calorimeter/towers
+	add InputArray Calorimeter/photons
+	add InputArray MuonMomentumSmearing/muons
+	
+	set OutputArray clusteringObjects
 }
 
 ############
 # Jet finder
 ############
 
-module FastJetFinder FastJetFinder {
-  set InputArray Calorimeter/towers
+module FastJetFinder TowerJetFinder {
+  set InputArray CalorimeterMerger/clusteringObjects
 
   set OutputArray jets
 
   # area algorithm: 0 Do not compute area, 1 Active area explicit ghosts, 2 One ghost passive area, 3 Passive area, 4 Voronoi, 5 Active area
-  set AreaAlgorithm 5
+  set AreaAlgorithm 0
 
   # jet algorithm: 1 CDFJetClu, 2 MidPoint, 3 SIScone, 4 kt, 5 Cambridge/Aachen, 6 antikt
   set JetAlgorithm 6
-  set ParameterR 0.6
-
-  set JetPTMin 20.0
-}
-
-###########################
-# Jet Pile-Up Subtraction
-###########################
-
-module JetPileUpSubtractor JetPileUpSubtractor {
-  set JetInputArray FastJetFinder/jets
-  set RhoInputArray Rho/rho
-
-  set OutputArray jets
+  set ParameterR 0.4
 
   set JetPTMin 20.0
 }
@@ -406,7 +283,7 @@ module JetPileUpSubtractor JetPileUpSubtractor {
 ##################
 
 module EnergyScale JetEnergyScale {
-  set InputArray JetPileUpSubtractor/jets
+  set InputArray TowerJetFinder/jets
   set OutputArray jets
 
  # scale formula for jets
@@ -414,131 +291,16 @@ module EnergyScale JetEnergyScale {
 }
 
 ###################
-# Photon efficiency
-###################
-
-module Efficiency PhotonEfficiency {
-  set InputArray Calorimeter/photons
-  set OutputArray photons
-
-  # set EfficiencyFormula {efficiency formula as a function of eta and pt}
-
-  # efficiency formula for photons
-  set EfficiencyFormula {                                      (pt <= 10.0) * (0.00) +
-                                           (abs(eta) <= 1.5) * (pt > 10.0)  * (0.95) +
-                         (abs(eta) > 1.5 && abs(eta) <= 2.5) * (pt > 10.0)  * (0.85) +
-                         (abs(eta) > 2.5)                                   * (0.00)}
-}
-
-##################
-# Photon isolation
-##################
-
-module Isolation PhotonIsolation {
-  set CandidateInputArray PhotonEfficiency/photons
-  set IsolationInputArray EFlowMerger/eflow
-  set RhoInputArray Rho/rho
-
-  set OutputArray photons
-
-  set DeltaRMax 0.5
-
-  set PTMin 0.5
-
-  set PTRatioMax 0.1
-}
-
-#####################
-# Electron efficiency
-#####################
-
-module Efficiency ElectronEfficiency {
-  set InputArray TrackPileUpSubtractor/electrons
-  set OutputArray electrons
-
-  # set EfficiencyFormula {efficiency formula as a function of eta and pt}
-
-  # efficiency formula for electrons
-  set EfficiencyFormula {                                      (pt <= 10.0) * (0.00) +
-                                           (abs(eta) <= 1.5) * (pt > 10.0)  * (0.95) +
-                         (abs(eta) > 1.5 && abs(eta) <= 2.5) * (pt > 10.0)  * (0.85) +
-                         (abs(eta) > 2.5)                                   * (0.00)}
-}
-
-####################
-# Electron isolation
-####################
-
-module Isolation ElectronIsolation {
-  set CandidateInputArray ElectronEfficiency/electrons
-  set IsolationInputArray EFlowMerger/eflow
-  set RhoInputArray Rho/rho
-
-  set OutputArray electrons
-
-  set DeltaRMax 0.5
-
-  set PTMin 0.5
-
-  set PTRatioMax 0.1
-}
-
-#################
-# Muon efficiency
-#################
-
-module Efficiency MuonEfficiency {
-  set InputArray TrackPileUpSubtractor/muons
-  set OutputArray muons
-
-  # set EfficiencyFormula {efficiency as a function of eta and pt}
-
-  # efficiency formula for muons
-  set EfficiencyFormula {                                      (pt <= 10.0) * (0.00) +
-                                           (abs(eta) <= 1.5) * (pt > 10.0)  * (0.95) +
-                         (abs(eta) > 1.5 && abs(eta) <= 2.7) * (pt > 10.0)  * (0.85) +
-                         (abs(eta) > 2.7)                                   * (0.00)}
-}
-
-################
-# Muon isolation
-################
-
-module Isolation MuonIsolation {
-  set CandidateInputArray MuonEfficiency/muons
-  set IsolationInputArray EFlowMerger/eflow
-  set RhoInputArray Rho/rho
-
-  set OutputArray muons
-
-  set DeltaRMax 0.5
-
-  set PTMin 0.5
-
-  set PTRatioMax 0.1
-}
-
-###################
 # Missing ET merger
 ###################
 
-module Merger MissingET {
+module Merger MissingETandScalarHT {
 # add InputArray InputArray
-  add InputArray EFlowMergerAllTracks/eflow
+  add InputArray Calorimeter/towers
+  add InputArray Calorimeter/photons
+  add InputArray MuonMomentumSmearing/muons
+
   set MomentumOutputArray momentum
-}
-
-
-##################
-# Scalar HT merger
-##################
-
-module Merger ScalarHT {
-# add InputArray InputArray
-  add InputArray UniqueObjectFinder/jets
-  add InputArray UniqueObjectFinder/electrons
-  add InputArray UniqueObjectFinder/photons
-  add InputArray UniqueObjectFinder/muons
   set EnergyOutputArray energy
 }
 
@@ -546,68 +308,20 @@ module Merger ScalarHT {
 # b-tagging
 ###########
 
-module BTagging BTagging {
-  set PartonInputArray Delphes/partons
+module HighPtBTagger HighPtBTagger {
   set JetInputArray JetEnergyScale/jets
 
-  set BitNumber 0
-
-  set DeltaR 0.5
-
-  set PartonPTMin 1.0
-
-  set PartonEtaMax 2.5
-
-  # add EfficiencyFormula {abs(PDG code)} {efficiency formula as a function of eta and pt}
-  # PDG code = the highest PDG code of a quark or gluon inside DeltaR cone around jet axis
-  # gluon's PDG code has the lowest priority
-
-  # default efficiency formula (misidentification rate)
-  add EfficiencyFormula {0} {0.001}
-
-  # efficiency formula for c-jets (misidentification rate)
-  add EfficiencyFormula {4} {                                      (pt <= 15.0) * (0.000) +
-                                                (abs(eta) <= 1.2) * (pt > 15.0) * (0.2*tanh(pt*0.03 - 0.4)) +
-                              (abs(eta) > 1.2 && abs(eta) <= 2.5) * (pt > 15.0) * (0.1*tanh(pt*0.03 - 0.4)) +
-                              (abs(eta) > 2.5)                                  * (0.000)}
-
-  # efficiency formula for b-jets
-  add EfficiencyFormula {5} {                                      (pt <= 15.0) * (0.000) +
-                                                (abs(eta) <= 1.2) * (pt > 15.0) * (0.5*tanh(pt*0.03 - 0.4)) +
-                              (abs(eta) > 1.2 && abs(eta) <= 2.5) * (pt > 15.0) * (0.4*tanh(pt*0.03 - 0.4)) +
-                              (abs(eta) > 2.5)                                  * (0.000)}
-}
-
-module TauTagging TauTagging {
-  set ParticleInputArray Delphes/allParticles
-  set PartonInputArray Delphes/partons
-  set JetInputArray JetEnergyScale/jets
-
-  set DeltaR 0.5
-
-  set TauPTMin 1.0
-
-  set TauEtaMax 2.5
-
-  # add EfficiencyFormula {abs(PDG code)} {efficiency formula as a function of eta and pt}
-
-  # default efficiency formula (misidentification rate)
-  add EfficiencyFormula {0} {0.001}
-  # efficiency formula for tau-jets
-  add EfficiencyFormula {15} {0.4}
-}
-
-#####################################################
-# Find uniquely identified photons/electrons/tau/jets
-#####################################################
-
-module UniqueObjectFinder UniqueObjectFinder {
-# earlier arrays take precedence over later ones
-# add InputArray InputArray OutputArray
-  add InputArray PhotonIsolation/photons photons
-  add InputArray ElectronIsolation/electrons electrons
-  add InputArray MuonIsolation/muons muons
-  add InputArray JetEnergyScale/jets jets
+  set BitNumber             3
+  set MinJetPt            500
+  set MinMuonPt            10
+  set MinTowerPtRatio     0.05
+  set CoreAntiktR         0.04
+  set MinCorePtRatio      0.5
+  set CoreMassHypothesis  3.0
+  set MinFinalMass        0.
+  set MaxFinalMass        1000.
+  set PercentSolidAngle   .9
+  
 }
 
 ##################
@@ -620,7 +334,7 @@ module UniqueObjectFinder UniqueObjectFinder {
 
 module TreeWriter TreeWriter {
 # add Branch InputArray BranchName BranchClass
-  add Branch Delphes/allParticles Particle GenParticle
+#  add Branch Delphes/allParticles Particle GenParticle
 
 #  add Branch TrackMerger/tracks Track Track
   add Branch Calorimeter/towers Tower Tower
@@ -629,14 +343,8 @@ module TreeWriter TreeWriter {
 #  add Branch Calorimeter/eflowPhotons EFlowPhoton Tower
 #  add Branch Calorimeter/eflowNeutralHadrons EFlowNeutralHadron Tower
 
-  add Branch GenJetFinder/jets GenJet Jet
-  add Branch UniqueObjectFinder/jets Jet Jet
-  add Branch UniqueObjectFinder/electrons Electron Electron
-  add Branch UniqueObjectFinder/photons Photon Photon
-  add Branch UniqueObjectFinder/muons Muon Muon
-  add Branch MissingET/momentum MissingET MissingET
-  add Branch ScalarHT/energy ScalarHT ScalarHT
-  add Branch Rho/rho Rho Rho
-  add Branch PileUpMerger/vertices Vertex Vertex
-
+  add Branch JetEnergyScale/jets Jet Jet
+  add Branch MuonMomentumSmearing/muons Muon Muon
+  add Branch MissingETandScalarHT/momentum MissingET MissingET
+  add Branch MissingETandScalarHT/energy ScalarHT ScalarHT
 }

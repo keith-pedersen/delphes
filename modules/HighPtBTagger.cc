@@ -30,6 +30,11 @@
 
 #include "TObjArray.h"
 #include "TLorentzVector.h"
+#include "TDirectory.h"
+#include "TFile.h"
+#include "TH1I.h"
+#include "TH1F.h"
+#include "TH2F.h"
 
 #include "fastjet/PseudoJet.hh"
 #include "fastjet/JetDefinition.hh"
@@ -46,11 +51,24 @@ using namespace std;
 
 const Double_t PI = acos(-1.);
 
+// Returns heaviest quark PID for hadrons, otherwise returns actual PID
+int flavor(int PID)
+{
+	PID = abs(PID);
+	
+	if(PID > 1000 && PID < 10000)
+		PID /= 1000;
+	else if(PID > 100)
+		PID = (PID%1000)/100;
+	
+	return PID;
+}
+
 //------------------------------------------------------------------------------
 
 HighPtBTagger::HighPtBTagger():
-	fMinJetPt(0.), fMinMuonPt(0.), fCoreAntiktR(0.), fMinCoreRatio(0.), fMinCoreMass(0.), fMaxEmissionInvariant(0.),
-	fJetInputArray(0), fItJetInputArray(0) {}
+	fJetInputArray(0), fItJetInputArray(0), fCoreDefinition(0),
+	histoFile(0) {}
 
 //------------------------------------------------------------------------------
 
@@ -63,14 +81,22 @@ void HighPtBTagger::Init()
 {
  	// read parameters
 
+	fBitNumber = GetInt("BitNumber", 3);
+	
 	fMinJetPt = GetDouble("MinJetPt", 1000.);
 	fMinMuonPt = GetDouble("MinMuonPt", 15.);
-	fCoreAntiktR = GetDouble("CoreAntiktR", .2);
-	fMinCoreRatio = GetDouble("MinCoreRatio", .8);
-	fMinCoreMass = GetDouble("MinCoreMass", 5.3);
+	
+	fMinTowerPtRatio = GetDouble("MinTowerPtRatio", .01);
+	fCoreAntiktR = GetDouble("CoreAntiktR", .1);
+	fMinCorePtRatio = GetDouble("MinCorePtRatio", .8);
+	
+	fCoreMassHypothesis = GetDouble("CoreMassHypothesis", 1.9);
+	fCoreMassHypothesis2 = fCoreMassHypothesis * fCoreMassHypothesis;
+	fMinFinalMass = GetDouble("MinFinalMass", 5.3);
+	fMaxFinalMass = GetDouble("MaxFinalMass", fMinFinalMass*2);	
 	
 	{
-		const Double_t sigma = abs(GetDouble("Sigma", .9));
+		const Double_t sigma = abs(GetDouble("PercentSolidAngle", .9));
 		
 		if(sigma >= 1.)
 		{	
@@ -82,388 +108,541 @@ void HighPtBTagger::Init()
 		cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Emission Invariant: " << fMaxEmissionInvariant << endl;
 	}
 	
-	fJetDefinition = new fastjet::JetDefinition(fastjet::antikt_algorithm, fCoreAntiktR);
+	fCoreDefinition = new fastjet::JetDefinition(fastjet::antikt_algorithm, fCoreAntiktR);
 	
 	// import input array(s)
 	fJetInputArray = ImportArray(GetString("JetInputArray", "FastJetFinder/jets"));
 	fItJetInputArray = fJetInputArray->MakeIterator();
 	
-	jetsAboveThreshold = 0;
-	jetsWithGoodMuons = 0;
-	jetsTagged = 0.;
-	invariants.clear();
+	fAllParticles = ImportArray("Delphes/allParticles");
+	
+	// Restore current gDirectory after done initializing. 
+	//TDirectory::TContext ctxt(0);
+	
+	// Append to existing root file
+	//histoFile = new TFile("HighPtBTagger_histos.root", "recreate");
+	
+	const Double_t
+		ptMax_jet = 2000.,
+		ptWidth_jet = 20.,
+		
+		ptMax_muon = 1000.,
+		ptWidth_muon = 5.,
+		
+		massMin = 1e-1, 
+		massMax = 100.,
+		
+		invariantMin = 1e-2,
+		invariantMax = 10.*fMaxEmissionInvariant,
+		
+		angleMin = 4e-4,
+		angleMax = .4;
+	
+	const Int_t 
+		numBins_jetPt = (ptMax_jet - fMinJetPt)/ptWidth_jet,
+		numBins_muonPt = (ptMax_muon - fMinMuonPt)/ptWidth_muon,
+		numBins_mass = 100,
+		numBins_invariant = 100,
+		numBins_angle = 50;
+		
+	// Array of lower edges (+ total upper edge) for mass and invariant
+	// This allows an intrinsic log scale for the binning
+	Double_t 
+		invariantEdges[numBins_invariant + 1],
+		massEdges[numBins_mass + 1],
+		angleEdges[numBins_angle +1];
+		
+	// Fill the lower edges
+	{	
+		Double_t lowerEdge = log(invariantMin);	
+		const Double_t logStep = (log(invariantMax) - lowerEdge)/numBins_invariant;
+		const Double_t* lastBin = invariantEdges + numBins_invariant;
+		
+		for(Double_t* bin = invariantEdges; bin <= lastBin; ++bin)
+		{
+			*bin = exp(lowerEdge);
+			lowerEdge += logStep; // Cumulative rounding error, but very small
+		}
+	}
+	
+	{	
+		Double_t lowerEdge = log(massMin);	
+		const Double_t logStep = (log(massMax) - lowerEdge)/numBins_mass;
+		const Double_t* lastBin = massEdges + numBins_mass;
+		
+		for(Double_t* bin = massEdges; bin <= lastBin; ++bin)
+		{
+			*bin = exp(lowerEdge);
+			lowerEdge += logStep; // Cumulative rounding error, but very small
+		}
+	}
+	
+	{	
+		Double_t lowerEdge = log(angleMin);	
+		const Double_t logStep = (log(angleMax) - lowerEdge)/numBins_angle;
+		const Double_t* lastBin = angleEdges + numBins_angle;
+		
+		for(Double_t* bin = angleEdges; bin <= lastBin; ++bin)
+		{
+			*bin = exp(lowerEdge);
+			lowerEdge += logStep; // Cumulative rounding error, but very small
+		}
+	}
+	
+	// The following histograms will be automatically owned by histoFile.
+	// Thus we need not delete them, only histoFile.
+	
+	// create ID
+	
+	pt_Jets = new TH1I("pt_Jets", "Jets vs. pt_Jet (GeV)",
+		numBins_jetPt, fMinJetPt, ptMax_jet);
+	pt_Jets->Sumw2();
+	
+	pt_Muons = new TH1I("pt_Muons", "Muons (in jets above threshold) vs. pt_Muon (GeV)",
+		numBins_muonPt, fMinMuonPt, ptMax_muon);
+	
+	
+	pt_MuJets = new TH1F("pt_MuJets", "% MuJet (Jet with muons) vs. pt_Jet (GeV)",
+		numBins_jetPt, fMinJetPt, ptMax_jet);
+	pt_MuJets->Sumw2();
+	
+	coreRatioHisto = new TH1F("coreRatio", "% Cores vs. (pt_Core/pt_MuJet)",
+		100, 0., 1.);
+	coreRatioHisto->Sumw2();
+		
+	coreMass_Raw = new TH1F("coreMass_Raw", "Raw HardCore (w/ muons subtracted) vs. Their mass (GeV)",
+		numBins_mass, massEdges);
+		
+	deltaMass_Raw = new TH1F("deltaMass_Raw", "Raw HardCores vs. Their deltaMass from adding muon (GeV)",
+		numBins_mass, massEdges);
+		
+	deltaMass_Fixed = new TH1F("deltaMass_Fixed", "Fixed HardCores vs. Their deltaMass from adding muon (GeV)",
+		numBins_mass, massEdges);
+		
+	pt_TaggedJets_Raw = new TH1F("pt_TaggedJets_Raw", "% Jets Tagged with Raw Core Mass (wrt MuJets) vs. pt_Jet (GeV)",
+		numBins_jetPt, fMinJetPt, ptMax_jet);
+	pt_TaggedJets_Raw->Sumw2();
+	
+	pt_TaggedJets_Fixed = new TH1F("pt_TaggedJets_Fixed", "% Jets Tagged with Fixed Core Mass (wrt MuJets) vs. pt_Jet (GeV)",
+		numBins_jetPt, fMinJetPt, ptMax_jet);
+	pt_TaggedJets_Fixed ->Sumw2();
+	
+	
+	xTrueHisto = new TH1F("xTrue", "Muons vs. x(muon, mother)",
+		numBins_invariant, invariantEdges);
+	
+	xRawHisto = new TH1F("x(mu, HardCore_Raw)", "Muons vs. x(muon, HardCore_Raw)",
+		numBins_invariant, invariantEdges);
+		
+	xFixedHisto = new TH1F("x(mu, HardCore_Fixed)", "Muons vs. x(muon, HardCore_Fixed)",
+		numBins_invariant, invariantEdges);
+	
+	xRawRatio = new TH1F("x_Raw/x_True", "Muons vs. x_Raw/x_True",
+		numBins_invariant, invariantEdges);
+	
+	xFixedRatio = new TH1F("x_Fixed/x_True", "Muons vs. x_Fixed/x_True",
+		numBins_invariant, invariantEdges);
+		
+ 	trueCoreError = new TH1F("trueCoreError", "difference in angle from core to actual mother",
+		numBins_angle, angleEdges);
+		
+	trueCoreErrorMuonTwice = new TH1F("trueCoreErrorMuonTwicer", "difference in angle from core to actual mother\n(when muon is added twice)",
+		numBins_angle, angleEdges);
+	
+	// create 2D
+	
+	coreMass_Raw_X_coreSpread = new TH2F("coreMass_Raw vs. coreSpread", "coreMass_Raw vs. coreSpread (rel. std. dev. of constituent E)",
+		numBins_mass, massEdges,
+		100, 0., 5.);
+	
+	deltaMass_Raw_X_coreMass_Raw = new TH2F("deltaMass_Raw vs. coreMass_Raw", "deltaMass_Raw (coreAfterMuon - coreBeforeMuon) vs. coreMass_Raw",
+		numBins_mass, massEdges,
+		numBins_mass, massEdges);
+	
+	xRaw_X_coreRatio = new TH2F("x(mu, HardCore_Raw) vs. coreRatio", "Muons vs. x(mu, HardCore_Raw) vs. coreRatio",
+		numBins_invariant, invariantEdges, 
+		100, 0., 1.);
+		
+	xFixed_X_coreRatio = new TH2F("x(mu, HardCore_Fixed) vs. coreRatio", "Muons vs. x(mu, HardCore_Fixed) vs. coreRatio",
+		numBins_invariant, invariantEdges, 
+		100, 0., 1.);
+	 
+	
+	/*
+	Not needed for now, just do it right before we divide
+			
+	// Tell all the histograms to keep track of squared weights. This will help
+	// for those we decide to divide
+	TIterator activeHistograms(histoFile->GetList()->MakeIterator());
+	TH1* histogram;
+	
+	while((histogram = static_cast<TH1*>(activeHistograms.Next())))
+	{
+		histogram->Sumw2();
+	}
+	*/
 }
 
 //------------------------------------------------------------------------------
 
 void HighPtBTagger::Finish()
 {
-	if(not invariants.empty())
-	{
-		cout << std::fixed;
-		cout << "\n\n\n{ " << invariants[0];
+	// Turn the percent histos into percent histos
+	pt_TaggedJets_Raw->Divide(pt_MuJets);
+	pt_TaggedJets_Fixed->Divide(pt_MuJets);
 	
-		for(unsigned int i = 1; i < invariants.size(); ++i)
-		{
-			cout << ", " << invariants[i];
-			if(i%10 == 9)
-				cout << "\n";
-		}
-		cout << "}\n\n\n";
-	}
-	
-	delete fJetDefinition;
+	pt_MuJets->Divide(pt_Jets);
+
+	delete fCoreDefinition;
 	delete fItJetInputArray;
+	//histoFile->Write();
+	delete histoFile; // Close() is first line of dtor
 }
 
 //------------------------------------------------------------------------------
 
 void HighPtBTagger::Process()
 {
-	vector<fastjet::PseudoJet> inputList;
-	
 	// loop over input jets
 	Candidate* jet;
 	fItJetInputArray->Reset();
 	
-	stringstream debugOut;
-	
-	const int granularity = 4; // granularity of ATLAS middle sample, 4x4 ECAL cells per HCAL cell
-	const Double_t eCalThreshold = 20.;
-	const Double_t eCalRadiusFactor = .5;
-	const Double_t invariantScaleFactor = 2./3.;
-	
-	const fastjet::JetDefinition eCalJetDefinition(fastjet::antikt_algorithm, fCoreAntiktR * eCalRadiusFactor);
-		
 	while((jet = static_cast<Candidate*>(fItJetInputArray->Next())))
 	{
-		// Reset the output stream 
-		debugOut.str("");
-		debugOut << setprecision(4);
-	
-		const Double_t jetPt = (jet->Momentum).Pt();
-		
-		if(jetPt >= fMinJetPt) // Ensure the jet is above the pt cut
+		// At best, neutrino estimation can only double the pt of the jet, 
+		// so only look at jets with at least half the required final pt
+		if((jet->Momentum.Pt()) >= .5*fMinJetPt) 
 		{
-			++jetsAboveThreshold;
-			debugOut << "pt/eta/phi:         " << jetPt << "\t| " << (jet->Momentum).Eta() << "\t| " << (jet->Momentum).Phi() << endl;
-		
-			TObjArray const* const jetConstituents = jet->GetCandidates();
-			TIterator* const itJetConstituents = jetConstituents->MakeIterator();
-			std::vector<Candidate const*> goodMuons;
+			// We'll sort jet constituents into two categories (where goodMuons are those which pass the pt cut)
+			std::vector<Candidate const*> goodMuons, everythingElse;
 			
-			// Find all muons that pass the pt cuts
 			{
+				TObjArray const* const jetConstituents = jet->GetCandidates();
+				TIterator* const itJetConstituents = jetConstituents->MakeIterator();
 				Candidate const* constituent;
 				
+				everythingElse.reserve(jetConstituents->GetEntriesFast());
+				
+				// Find all muons that pass the pt cuts
 				while((constituent = static_cast<Candidate const*>(itJetConstituents->Next())))
 				{
-					if((abs(constituent->PID) == 13) and ((constituent->Momentum).Pt() >= fMinMuonPt))
-						goodMuons.push_back(constituent);
+					if(abs(constituent->PID) == 13)
+					{
+						const Double_t muonPt = (constituent->Momentum).Pt();
+					
+						if(muonPt >= fMinMuonPt)
+						{
+							pt_Muons->Fill(muonPt);
+							goodMuons.push_back(constituent);
+							continue;
+						}
+					}
+					everythingElse.push_back(constituent);
 				}
+				
+				delete itJetConstituents;
 			}
 			
-			if(not goodMuons.empty()) // Ensure we have at least one muon with enough pt
+			if(not goodMuons.empty()) // Ensure we have at least one good muon
 			{
-				++jetsWithGoodMuons;
-				// To find the hard core, we could cluster HCAL cells. But the problem
-				// is that we're looking for a hard core whose radius is likely smaller
-				// than the size of HCAL cells. To improve the angular resolution, we 
-				// can make a "reasonable" assumption that a highly boosted jet will have
-				// at least one pi0, and that this energy will get boosted into significant
-				// energy deposits in the ECAL. Thus, ECAL hits can be used for pointing 
-				// information for all the energy of the tower.
-				// Initialy, this algorithm was implemented on a cell-by-cell basis, 
-				// using each tower's ECAL hits to direct it's HCAL energy.
-				// In the second iteration, we will allow the ECAL energy from 
-				// neighboring towers to cluster. This ECAL energy will then pull HCAL
-				// energy along with it (in an amount proportional to its ECAL propotion 
-				// in the tower).
-				// To reduce noise, we will require the energy in an ECAL cell to 
-				// exceed a given threshold before it can participate in the clustering.
-								
-				std::vector<ECalTower> eCalTowers;
-				std::vector<Candidate const*> standaloneHCalTowers;
+				// Sometimes there will be more than 1 muon. In those cases, we will
+				// assume that the muons were emitted from highest to lowest pt.
+				// This means we'll need to add them back from low to high pt, so that 
+				// the CM frame of the muon emitted 2nd doesn't include the 1st muon.
+									
+				// Sort muons low to high 
+				std::sort(goodMuons.begin(), goodMuons.end(), SortCandidatePt_Low2High);
+			
+				// To find the hard core, we recluster the jet constituents
+				vector<fastjet::PseudoJet> reclusterInput;
+				
+				// Add the good muons to the reclusterInput
+				// Give them a negative user_index ( user_index = index in goodMuons - goodMuons.size() )
+				// This makes them easy to find after the reclustering.
 				{
-					Candidate* tower;			
-					
-					itJetConstituents->Reset();
-					while((tower = static_cast<Candidate*>(itJetConstituents->Next())))
+					const int numMuons = goodMuons.size();
+					for(int iMu = 0; iMu < numMuons; ++iMu)
 					{
-						// Make sure it has meaningful energy and is not a track
-						if(((tower->Momentum).Pt() >= .01*jetPt) and (tower->Charge == 0))
+						const TLorentzVector& muonMomentum = goodMuons[iMu]->Momentum;
+						reclusterInput.emplace_back(muonMomentum.Px(), muonMomentum.Py(), muonMomentum.Pz(), muonMomentum.E());
+						reclusterInput.back().set_user_index(iMu - numMuons);
+					}
+				}
+				
+				// Now put the jet constituents into reclusterInput
+				// Use all tracks, but only use towers/eFlowNeutrals (charge == 0) if they are above the relative pt threshold
+				{
+					const Double_t minTowerPt = fMinTowerPtRatio*(jet->Momentum).Pt();
+					for(unsigned int iEverythingElse = 0; iEverythingElse < everythingElse.size(); ++iEverythingElse)
+					{
+						Candidate const* const constituent = everythingElse[iEverythingElse];
+						
+						if((constituent->Charge == 0) && ((constituent->Momentum).Pt() < minTowerPt))
+							continue;
+						
+						reclusterInput.emplace_back((constituent->Momentum).Px(), (constituent->Momentum).Py(), (constituent->Momentum).Pz(), (constituent->Momentum).E());
+						reclusterInput.back().set_user_index(iEverythingElse);
+					}
+				}
+				
+				// We'll be working with 2 cores, one with a raw mass, the other
+				// where the mass has been fixed
+				TLorentzVector coreRaw, coreFixed;				
+				
+				Double_t 
+					minRawX = 99.,
+					minFixedX = 99.;
+				// Now recluster
+				{
+					fastjet::ClusterSequence recluster(reclusterInput, *fCoreDefinition);
+					std::vector<fastjet::PseudoJet> subJets = fastjet::sorted_by_pt(recluster.inclusive_jets(20.));
+					
+					// Old choice, 
+					fastjet::PseudoJet coreBig = subJets.front(); 
+					
+					/*
+					fastjet::PseudoJet core;					
+					
+					// The core should be the subjet which will intrinsically minimize the CM mass
+					// Thus, we want to minimize massFactor: sqrt(pt_core)*deltaR(muon, core)
+					{
+						const fastjet::PseudoJet& hardestMuon = reclusterInput[goodMuons.size() - 1];
+						Double_t minMassFactor2 = 9e9;
+						unsigned int coreIndex = 0;
+						
+						for(unsigned int iSub = 0; iSub < subJets.size(); ++iSub)
 						{
-							// Find the edges of the tower (HCAL cell)
-							const Double_t
-								etaMin = tower->Edges[0],
-								etaMax = tower->Edges[1],
-								phiMin = tower->Edges[2],
-								phiMax = tower->Edges[3];
-						
-							// Find the width of each ECAL cell
-							const Double_t
-								etaWidth = (etaMax - etaMin)/granularity,
-								phiWidth = (phiMax - phiMin)/granularity;
-								 
-							// Create the ECAL grid
-							// Linear grid would be more efficient, implement later
-							Double_t eCalGrid[granularity][granularity];
+							// By minimizing the squared massFactor, we'll minimize the massFactor
+							const Double_t massFactor2 = subJets[iSub].kt2()*hardestMuon.squared_distance(subJets[iSub]);
 							
-							// Zero the grid
-							for(int eta = 0; eta < granularity; ++eta)
-								for(int phi = 0; phi < granularity; ++phi)
-									eCalGrid[eta][phi] = 0.;
-							
-							// Prepare to loop through the tower's constituents
-							TIterator* fItTowerConstituents = (tower->GetCandidates())->MakeIterator();
-							Candidate const* towerConstituent;
-													
-							// Loop over all particles and bin them into ECAL grids
-							while((towerConstituent = static_cast<Candidate*>(fItTowerConstituents->Next())))
+							if(massFactor2 < minMassFactor2)
 							{
-								const int absID = abs(towerConstituent->PID);
-								
-								if((absID == 11) or (absID == 22)) // electrons and photons
-								{
-									// Cal eta/phi depends on position, not momentum
-									const TLorentzVector& thisPosition = towerConstituent->Position;
-									const int 
-										thisEtaIndex = int((thisPosition.Eta() - etaMin)/etaWidth),
-										thisPhiIndex = int((thisPosition.Phi() - phiMin)/phiWidth);
-								
-									eCalGrid[thisEtaIndex][thisPhiIndex] += (towerConstituent->Momentum).E();
-									
-									if(absID == 11)
-										debugOut << "Electron:           " << (towerConstituent->Momentum).E() << "\n";
-								}
+								minMassFactor2 = massFactor2;
+								coreIndex = iSub;
 							}
+						}
 						
-							TLorentzVector eCalMomentum;
-							Double_t qualifyingEnergy = 0.;
-							const unsigned int firstETowerIndex = eCalTowers.size();
-						
-							// Now loop over all ECAL grids and, if they are above the 
-							// energy threshold, creat an ECalTower
-							for(int eta = 0; eta < granularity; ++eta)
+						core = subJets[coreIndex];
+					}
+					
+					*/
+												
+					// Find the core's constituents
+					std::vector<fastjet::PseudoJet> coreConstituents = recluster.constituents(subJets.front());
+					
+					{
+						// Find any good muons in the core and subtract their 4-momentum
+						// For the rest of the core constituents, keep a running tally of their energy and energy**2
+						Double_t 
+							sumCoreE = 0.,
+							sumCoreE2 = 0.;
+						unsigned int muonsInCore = 0;
+						for(std::vector<fastjet::PseudoJet>::const_iterator itCore = coreConstituents.begin(); itCore != coreConstituents.end(); ++itCore)
+						{
+							if(itCore->user_index() < 0)
 							{
-								for(int phi = 0; phi < granularity; ++phi)
-								{
-									const Double_t eCalEnergy = eCalGrid[eta][phi];
-									
-									if(eCalEnergy >= eCalThreshold)
-									{
-										const Double_t newEta = etaMin + (0.5 + eta)*etaWidth;
-										eCalMomentum.SetPtEtaPhiM(eCalEnergy/cosh(newEta), newEta, phiMin + (0.5 + phi)*phiWidth, 0.);
-										eCalTowers.emplace_back(eCalMomentum, eCalEnergy*(tower->Ehad));
-										qualifyingEnergy += eCalEnergy;
-									}
-								}
-							}
-							
-							const unsigned int pastLastETowerIndex = eCalTowers.size();
-							
-							if(pastLastETowerIndex == firstETowerIndex)
-							{
-								standaloneHCalTowers.push_back(tower);
-								debugOut << "Standalone:         " << tower->Momentum.E() << "\n";
+								core -= *itCore;
+								++muonsInCore;
 							}
 							else
 							{
-								// Now loop over any newly created ECalTowers and scale their hCalEnergy by 
-								// the amount of ECalEnergy that qualified
-								for(unsigned int eTowerIndex = firstETowerIndex; eTowerIndex < pastLastETowerIndex; ++eTowerIndex)
-									eCalTowers[eTowerIndex].hCalEnergy /= qualifyingEnergy;
-								debugOut << "EM pointed:         " << "{ " << tower->Eem << " , " << tower->Ehad << " }\n";
+								const Double_t thisE = itCore->E();
+								sumCoreE += thisE;
+								sumCoreE2 += thisE*thisE;
 							}
-						
-							delete fItTowerConstituents;
 						}
-					}
-				}
-				
-				{
-					inputList.clear();
-					int numConstituents = 0;
-	
-					// Now feed all ECalTowers into fastjet
-					for(std::vector<ECalTower>::const_iterator itETower = eCalTowers.begin(); itETower not_eq eCalTowers.end(); ++itETower)
-					{
-						const TLorentzVector& eTowerP4 = itETower->eCalMomentum;
-						
-						inputList.emplace_back(eTowerP4.Px(), eTowerP4.Py(), eTowerP4.Pz(), eTowerP4.E());						
-						inputList.back().set_user_index( numConstituents++ );
-					}
-				}
-				
-				{	
-					// Now cluster the ECalTowers
-					fastjet::ClusterSequence clusterSequence(inputList, eCalJetDefinition);
-					std::vector<fastjet::PseudoJet> outputList = fastjet::sorted_by_pt(clusterSequence.inclusive_jets(0.));
 					
-					if(not outputList.empty())
-						debugOut << "highest energy EM: " << outputList.front().E() << "\n";
+						coreRaw.SetPxPyPzE(core.px(), core.py(), core.pz(), core.E());
 					
-					// Now loop through each output jet
-					for(std::vector<fastjet::PseudoJet>::iterator itOutJet = outputList.begin(); itOutJet not_eq outputList.end(); ++itOutJet)
-					{
-						// Find its constituents
-						std::vector<fastjet::PseudoJet> inJet = clusterSequence.constituents(*itOutJet);
-						
-						Double_t hCalAddition = 0.;
-						// Now loop through those constituents and add up all the HCalEnergy we need to add
-						for(std::vector<fastjet::PseudoJet>::const_iterator itInJet = inJet.begin(); itInJet not_eq inJet.end(); ++itInJet)
-							hCalAddition += eCalTowers[itInJet->user_index()].hCalEnergy;
-						
-						// Now scale the 4-vectors to bring their HCAL energy along with them
-						// We'll do this by discarding any aqcuired mass and use the momentum
-						// as a massless 4-vector
-						
-						const Double_t p3Mag = sqrt(itOutJet->modp2());
-						const Double_t newScale = (1. + hCalAddition/p3Mag);
-						itOutJet->reset_momentum(itOutJet->px()*newScale, itOutJet->py()*newScale, itOutJet->pz()*newScale, p3Mag*newScale);						
-					}
-					
-					// Now clear the inputlist and re-fill it
-					inputList.clear();
-					int numConstituents = 0;
-					// Start with the muons, so that their user_index is easy to find (less than goodMuons.size())
-					for(std::vector<Candidate const*>::const_iterator itMuons = goodMuons.begin(); itMuons not_eq goodMuons.end(); ++itMuons)
-					{
-						const TLorentzVector& thisMuon = (*itMuons)->Momentum;
-						inputList.emplace_back(thisMuon.Px(), thisMuon.Py(), thisMuon.Pz(), thisMuon.E());
-						inputList.back().set_user_index( numConstituents++ );
-					}
-					debugOut << "good muons:         " << goodMuons.size() << "\n";
-					
-					// Now add the ECAL directed HCAL towers
-					for(std::vector<fastjet::PseudoJet>::const_iterator itOutJet = outputList.begin(); itOutJet not_eq outputList.end(); ++itOutJet)
-					{
-						inputList.emplace_back(itOutJet->px(), itOutJet->py(), itOutJet->pz(), itOutJet->E());
-						inputList.back().set_user_index( numConstituents++ );
-					}
-					debugOut << "ECAL jets:          " << outputList.size() << "\n";
-					
-					// Don't add standalone HCAL towers (using the center of the tower)
-					/*
-					for(std::vector<Candidate const*>::const_iterator itStandalone = standaloneHCalTowers.begin(); itStandalone not_eq standaloneHCalTowers.end(); ++itStandalone)
-					{
-						const TLorentzVector& thisTower = (*itStandalone)->Momentum;
-						inputList.emplace_back(thisTower.Px(), thisTower.Py(), thisTower.Pz(), thisTower.E());
-						inputList.back().set_user_index( numConstituents++ );
-					}
-					*/
-					debugOut << "standalone HCAL:    " << standaloneHCalTowers.size() << "\n";
-				}
-				
-				// Now cluster the new list
-				fastjet::ClusterSequence clusterSequence(inputList, *fJetDefinition);
-				std::vector<fastjet::PseudoJet> outputList = fastjet::sorted_by_pt(clusterSequence.inclusive_jets( jetPt * fMinCoreRatio ));
-				
-				if(not outputList.empty()) // Make sure at least one subjet passed the pt cut
-				{
-					fastjet::PseudoJet coreCopy = outputList.front(); // The highest pt jet is the core
-										
-					debugOut << "core Pt:            " << sqrt(coreCopy.kt2()) << endl;
-					debugOut << "core mass:          " << coreCopy.m() << endl;
-					
-					{
-						// Find the number of core constituents
-						std::vector<fastjet::PseudoJet> coreConstituents = clusterSequence.constituents(outputList.front());
-						
-						debugOut << "coreConstituents:   " << coreConstituents.size() << endl;
-						
-						// Find any muons in the core and subtract their 4-momentum
-						for(std::vector<fastjet::PseudoJet>::iterator itCore = coreConstituents.begin(); itCore != coreConstituents.end(); ++itCore)
+						// Now assume that the reconstructed hadronic mass is horribly incorrect,
+						// created almost entirely by the geometry/granularity of the Cal cells, 
+						// as well as the magnetic spreading in phi
+						// Thus, apply a mass hypothesis to the core.
 						{
-							if(itCore->user_index() < goodMuons.size())
-								coreCopy -= *itCore;
+							TVector3 coreP3 = coreRaw.Vect();
+							Double_t coreE = coreRaw.E();
+							// Rescale the momentum to the new mass
+							coreP3 *= sqrt(coreE*coreE - fCoreMassHypothesis2) / coreP3.Mag();
+
+							coreFixed.SetPxPyPzE(coreP3.Px(), coreP3.Py(), coreP3.Pz(), coreE);
+						}
+					
+						// Study the raw core mass, now that the muons have been subtracted
+						{
+							const Double_t coreMassRaw = coreRaw.M();
+							coreMass_Raw->Fill(coreMassRaw);
+							// Here, coreSpread is the relative standard deviation of the energy (sqrt(N * sum(E**2)/sum(E)**2  - 1))
+							coreMass_Raw_X_coreSpread->Fill(coreMassRaw, sqrt((coreConstituents.size() - muonsInCore)*sumCoreE2/(sumCoreE*sumCoreE) - 1.));
 						}
 					}
+										
 					
-					TLorentzVector coreMomentum(coreCopy.px(), coreCopy.py(), coreCopy.pz(), coreCopy.E()); //xyzt
-						
-					// Sometimes there will be more than 1 muon. In those cases, we will
-					// assume that the muons were emitted from highest to lowest pt.
-											
-					// Sort muons low to high
-					std::sort(goodMuons.begin(), goodMuons.end(), SortCandidatePt_Low2High);
-					
-					debugOut << "\n";
 					
 					// Now add back each muon's 4-momentum, estimate its neutrino, and calculate the resulting boost invariant
-					for(std::vector<Candidate const*>::iterator itMuon = goodMuons.begin(); itMuon != goodMuons.end(); ++itMuon)
+					for(std::vector<Candidate const*>::const_iterator itMuon = goodMuons.begin(); itMuon != goodMuons.end(); ++itMuon)
 					{
-						TVector3 muonP3;
-						{
-							const TLorentzVector& muonMomentum = (*itMuon)->Momentum;
-							muonP3 = muonMomentum.Vect();
+						const Double_t 
+							originalMassRaw = coreRaw.M(),
+							originalMassFixed = coreFixed.M();
 						
-							// Add the muon back to the core
-							coreMomentum += muonMomentum;
+						const TVector3 muonP3 = ((*itMuon)->Momentum).Vect();
+						
+						// Add the muon back to the core
+						coreRaw += (*itMuon)->Momentum;
+						coreFixed += (*itMuon)->Momentum;
+						
+						Candidate const* matriarch = static_cast<Candidate*>(fAllParticles->At((*itMuon)->M1));
+						{
+							// We are interested in the original boosted mother (the matriarch). This muon
+							// could have come from a tau which came from something else.
+							// We need to look back all the way to the start of hadronization.
+						
+							// To look back all the way to hadronization, we find the first mother with more than 1 mother (when color charge still existed)
+							Candidate const* mother = matriarch;
+							while(mother->M2 == 0)
+							{
+								const int absMotherPID = abs(mother->PID);
 							
-							debugOut << "muon Pt:            " << muonMomentum.Pt() << endl;
+								if((absMotherPID >= 22) or (absMotherPID <= 24))
+								{
+									// Safety check for primary muons (A, Z, W)
+									// Pythia hadronic decay never specifically invokes a W; hence,
+									// if this is a W, it must have come from the hard interaction.
+									// By breaking here, we treat the A/Z/W as the original mother
+									break;
+								}
+								else
+								{
+									matriarch = mother;
+									mother = static_cast<Candidate*>(fAllParticles->At(mother->M1));
+								
+									if(not mother)
+										break;
+								}
+							}
 						}
 						
-						TVector3 neutrino;
-						{
-							// We do not want to bias the core momentum towards the muon emission direction
-							// Thus, we give the neutrino the direction of the core, projecting out the 
-							// magnitude of the muon momentum.
-							//     neutrinoP3> = (muonP3>.coreP3> / coreP3>.coreP3>) * coreP3>
-							const TVector3 coreP3 = coreMomentum.Vect();
-							neutrino = coreP3;							
-							neutrino *= coreP3.Dot(muonP3)/coreP3.Mag2();
-						}
+						const TVector3 motherP3 = (matriarch->Momentum).Vect();
 						
+						const Double_t xTrue = (matriarch->Momentum).E() / matriarch->Mass * 
+								(muonP3.Cross(motherP3).Mag() / muonP3.Dot(motherP3));
+						
+						// Study difference to core for 
 						{
-							TLorentzVector neutrinoMomentum(neutrino.Px(), neutrino.Py(), neutrino.Pz(), neutrino.Mag());
+							const int matriarchFlavor = flavor(matriarch->PID);
 							
-							// Don't add the neutrino to the core, since it won't change its direction							
-							// coreMomentum += neutrinoMomentum;
-							// Also add the neutrino the jet;
-							jet->Momentum += neutrinoMomentum;
-							
-							debugOut << "neutrino Pt:        " << neutrinoMomentum.Pt() << endl;
-						}
+							if((matriarchFlavor > 3) and (matriarchFlavor < 6))
+							{
+								xTrueHisto->Fill(xTrue);						
+								trueCoreError->Fill(motherP3.Angle(coreFixed.Vect()));
 						
-						// Find the boost of the core, disallowing any mass lower than (fMinCoreMass)
-						const Double_t coreBoostMass = std::max(coreMomentum.M(), fMinCoreMass);
-						const Double_t coreBoost = coreMomentum.E()/coreBoostMass;						
-													
-						debugOut << "core Pt:            " << coreMomentum.Pt() << endl;
-						debugOut << "core Mass:          " << coreBoostMass << endl;							
+								// Does adding the muon twice get us closer to the actual mother?
+								{
+									TLorentzVector muonTwice(coreFixed);
+									muonTwice += (*itMuon)->Momentum;
 						
-						const TVector3 coreP3 = coreMomentum.Vect();
-						const Double_t CMInvariant = invariantScaleFactor * coreBoost * (muonP3.Cross(coreP3)).Mag() / muonP3.Dot(coreP3);
+									trueCoreErrorMuonTwice->Fill(motherP3.Angle(muonTwice.Vect()));
+								}	
+								// Yes, it does. This helps us in two regards. The core is closer to
+								// the mother, and the muon is closer to the core. 
+							}
+						}						
 						
-						if(CMInvariant <= fMaxEmissionInvariant)
-						{
-							++jetsTagged;
-						}
+						// Simulate the neutrino by adding the muon twice
+						coreRaw += (*itMuon)->Momentum;
+						coreFixed += (*itMuon)->Momentum;	
+						jet->Momentum += (*itMuon)->Momentum;
 						
-						debugOut << "CM invaraint:       " << CMInvariant << endl;
-						debugOut << "\n";
-						
-						invariants.push_back(CMInvariant);
-						
-					}// End loop over muons
-					debugOut << "w/goodMuon efficiency...." << jetsTagged/jetsWithGoodMuons << "\n";
-					debugOut << "Total efficiency........." << jetsTagged/jetsAboveThreshold << "\n\n"; 
+						/*						
+						{				
+							TVector3 neutrino;
+							{
+								// Since the angle between the core and the muon is extremely important, 
+								// we don't want to bias the core towards the muon. Thus, instead of
+								// adding the muon twice, we give the neutrino the direction of the core, 
+								// projecting out the magnitude of the muon momentum.
+								//     neutrinoP3> = (muonP3>.coreP3> / coreP3>.coreP3>) * coreP3>
+								const TVector3 coreP3 = coreRaw.Vect(); // raw and fixed should point in same direction
+								neutrino = coreP3;							
+								neutrino *= coreP3.Dot(muonP3)/coreP3.Mag2();
+							}
 					
-					cout << debugOut.str();
-					cout << "\n---------------------------------------------------------\n";				
-				}// End core pt cut					
-			}//End Muon pt cut			
+							{
+								TLorentzVector neutrinoMomentum(neutrino.Px(), neutrino.Py(), neutrino.Pz(), neutrino.Mag()); //xyzt
+						
+								// Add the nuetrino to the core AND to the jet
+								coreRaw += neutrinoMomentum;
+								coreFixed += neutrinoMomentum;
+								jet->Momentum += neutrinoMomentum;							
+							}
+						}
+						*/
+						
+						// Study original mass of core, vs. mass when muon (and neutrino) are added
+						{
+							const Double_t deltaMassRaw = coreRaw.M() - originalMassRaw;
+							deltaMass_Raw->Fill(deltaMassRaw);
+							deltaMass_Raw_X_coreMass_Raw->Fill(deltaMassRaw, originalMassRaw);
+							
+							deltaMass_Fixed->Fill(coreFixed.M() - originalMassFixed);
+						}
+						
+						// Find the boost of the core, forcing the mass to be in [fMinFinalMass, fMaxFinalMass]
+						
+						const Double_t 
+							boostMassRaw = std::min(std::max(coreRaw.M(), fMinFinalMass), fMaxFinalMass),
+							boostMassFixed = std::min(std::max(coreFixed.M(), fMinFinalMass), fMaxFinalMass);
+							
+						const Double_t 
+							coreBoostRaw = coreRaw.E()/boostMassRaw,
+							coreBoostFixed = coreFixed.E()/boostMassFixed;
+														
+						const Double_t 
+							xRaw = coreBoostRaw * (muonP3.Cross(coreRaw.Vect()).Mag() / muonP3.Dot(coreRaw.Vect())),
+							xFixed = coreBoostFixed * (muonP3.Cross(coreFixed.Vect()).Mag() / muonP3.Dot(coreFixed.Vect()));
+							
+						xRawHisto->Fill(xRaw);
+						xFixedHisto->Fill(xFixed);
+						
+						xRawRatio->Fill(xRaw/xTrue);
+						xFixedRatio->Fill(xFixed/xTrue);
+					
+						minRawX = std::min(minRawX, xRaw);
+						minFixedX = std::min(minFixedX, xFixed);
+					}// End loop over muons
+				}// End Reclustering
+				
+				const Double_t jetPt = (jet->Momentum).Pt();
+				pt_MuJets->Fill(jetPt);		
+				
+				const Double_t coreRatio = (coreRaw.Pt() / jetPt);
+				coreRatioHisto->Fill(coreRatio);
+				
+				xRaw_X_coreRatio->Fill(minRawX, coreRatio);
+				xFixed_X_coreRatio->Fill(minFixedX, coreRatio);
+				
+					
+				// Make sure it's a hard core
+				if(coreRatio >= fMinCorePtRatio)
+				{
+					if(minRawX <= fMaxEmissionInvariant)
+					{
+						jet->BTag |= (1 << fBitNumber);
+						pt_TaggedJets_Raw->Fill(jetPt);
+					}
+					
+					if(minFixedX < fMaxEmissionInvariant)
+					{
+						jet->BTag |= (1 << fBitNumber);
+						pt_TaggedJets_Fixed->Fill(jetPt);
+					}
+				}
+			}//End muon pt cut
 			
-			delete itJetConstituents;			
-		}//End jet pt cut  	
+			pt_Jets->Fill((jet->Momentum).Pt());			
+		}//End jet initial pt cut  	
 	}//End loop over jets
 }
-
-//------------------------------------------------------------------------------
-
-ECalTower::ECalTower(const TLorentzVector& eCalMomentum_in, const Double_t hCalEnergy_in):
-	eCalMomentum(eCalMomentum_in), hCalEnergy(hCalEnergy_in) {}
 
 //------------------------------------------------------------------------------
 
@@ -718,4 +897,3 @@ void HighPtBTagger::Process()
 }
 
 */
-

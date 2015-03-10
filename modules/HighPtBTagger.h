@@ -69,16 +69,17 @@
 
 #include "classes/DelphesModule.h"
 
-#include "TLorentzVector.h"
-
 class TObjArray;
 class TIterator;
 class Candidate;
+class TFile;
+class TH1I;
+class TH1F;
+class TH2F;
 
 namespace fastjet 
 {
   class JetDefinition;
-  class PseudoJet;
 }
 
 class HighPtBTagger: public DelphesModule
@@ -93,33 +94,58 @@ class HighPtBTagger: public DelphesModule
 		void Finish();
 
 	private:
+		Int_t fBitNumber;
 		Double_t fMinJetPt;
 		Double_t fMinMuonPt;
+		Double_t fMinTowerPtRatio;
 		Double_t fCoreAntiktR;
-		Double_t fMinCoreRatio;
-		Double_t fMinCoreMass;
+		Double_t fMinCorePtRatio;
+		Double_t fCoreMassHypothesis;
+		Double_t fCoreMassHypothesis2;
+		Double_t fMinFinalMass;
+		Double_t fMaxFinalMass;
 		Double_t fMaxEmissionInvariant;
 		
-		// Testing variables
-		int jetsAboveThreshold;
-		int jetsWithGoodMuons;
-		double jetsTagged;
-		std::vector<Double_t> invariants;	
-
 		TObjArray const* fJetInputArray; //!
 		TIterator* fItJetInputArray; //!
 		
-		fastjet::JetDefinition* fJetDefinition;
+		TObjArray const* fAllParticles;
+		
+		fastjet::JetDefinition* fCoreDefinition;
+		
+		TFile* histoFile;
+				
+		TH1I 
+			*pt_Jets,
+			*pt_Muons;
+		TH1F 
+			*pt_MuJets,
+			*coreRatioHisto,
+			
+			*xTrueHisto,
+			
+			*coreMass_Raw,
+			*deltaMass_Raw,
+			*xRawHisto,
+			*xRawRatio,
+			*pt_TaggedJets_Raw,			
+			
+			*deltaMass_Fixed,
+			*xFixedHisto,
+			*xFixedRatio,
+			*pt_TaggedJets_Fixed,
+			
+			*trueCoreError,
+			*trueCoreErrorMuonTwice;
+			
+		TH2F
+			*coreMass_Raw_X_coreSpread,
+			*deltaMass_Raw_X_coreMass_Raw,
+			*xRaw_X_coreRatio,
+			
+			*xFixed_X_coreRatio;			
 
 		ClassDef(HighPtBTagger, 1)
-};
-
-struct ECalTower
-{
-	TLorentzVector eCalMomentum;
-	Double_t hCalEnergy;
-		
-	ECalTower(const TLorentzVector& eCalMomentum_in, const Double_t hCalEnergy_in);
 };
 
 bool SortCandidatePt_Low2High(Candidate const* one, Candidate const* two);
