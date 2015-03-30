@@ -46,7 +46,7 @@ CompBase *Candidate::fgCompare = CompMomentumPt<Candidate>::Instance();
 
 //------------------------------------------------------------------------------
 
-TLorentzVector GenParticle::P4()
+TLorentzVector GenParticle::P4() const
 {
   TLorentzVector vec;
   vec.SetPxPyPzE(Px, Py, Pz, E);
@@ -55,7 +55,7 @@ TLorentzVector GenParticle::P4()
 
 //------------------------------------------------------------------------------
 
-TLorentzVector MissingET::P4()
+TLorentzVector MissingET::P4() const
 {
   TLorentzVector vec;
   vec.SetPtEtaPhiM(MET, Eta, Phi, 0.0);
@@ -64,7 +64,7 @@ TLorentzVector MissingET::P4()
 
 //------------------------------------------------------------------------------
 
-TLorentzVector Photon::P4()
+TLorentzVector Photon::P4() const
 {
   TLorentzVector vec;
   vec.SetPtEtaPhiM(PT, Eta, Phi, 0.0);
@@ -73,7 +73,7 @@ TLorentzVector Photon::P4()
 
 //------------------------------------------------------------------------------
 
-TLorentzVector Electron::P4()
+TLorentzVector Electron::P4() const
 {
   TLorentzVector vec;
   vec.SetPtEtaPhiM(PT, Eta, Phi, 0.0);
@@ -82,7 +82,7 @@ TLorentzVector Electron::P4()
 
 //------------------------------------------------------------------------------
 
-TLorentzVector Muon::P4()
+TLorentzVector Muon::P4() const
 {
   TLorentzVector vec;
   vec.SetPtEtaPhiM(PT, Eta, Phi, 0.0);
@@ -91,7 +91,7 @@ TLorentzVector Muon::P4()
 
 //------------------------------------------------------------------------------
 
-TLorentzVector Jet::P4()
+TLorentzVector Jet::P4() const
 {
   TLorentzVector vec;
   vec.SetPtEtaPhiM(PT, Eta, Phi, Mass);
@@ -100,7 +100,7 @@ TLorentzVector Jet::P4()
 
 //------------------------------------------------------------------------------
 
-TLorentzVector Track::P4()
+TLorentzVector Track::P4() const
 {
   TLorentzVector vec;
   vec.SetPtEtaPhiM(PT, Eta, Phi, 0.0);
@@ -109,7 +109,7 @@ TLorentzVector Track::P4()
 
 //------------------------------------------------------------------------------
 
-TLorentzVector Tower::P4()
+TLorentzVector Tower::P4() const
 {
   TLorentzVector vec;
   vec.SetPtEtaPhiM(ET, Eta, Phi, 0.0);

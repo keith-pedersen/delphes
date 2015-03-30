@@ -33,7 +33,7 @@ endif
 ifneq ($(LD_LIBRARY_PATH),)
 OPT_LIBS += -L$(subst include,lib,$(subst :, -L,$(LD_LIBRARY_PATH)))
 endif
-OPT_LIBS += -lGenVector -lFWCoreFWLite -lDataFormatsFWLite -lDataFormatsPatCandidates -lDataFormatsLuminosity -lSimDataFormatsGeneratorProducts -lCommonToolsUtils
+OPT_LIBS += -lGenVector -lFWCoreFWLite -lDataFormatsFWLite -lDataFormatsPatCandidates -lDataFormatsLuminosity -lSimDataFormatsGeneratorProducts -lCommonToolsUtils -lDataFormatsCommon
 endif
 
 ifneq ($(PROMC),)
@@ -338,6 +338,7 @@ tmp/modules/ModulesDict.$(SrcSuf): \
 	modules/PileUpMerger.h \
 	modules/JetPileUpSubtractor.h \
 	modules/TrackPileUpSubtractor.h \
+	modules/TaggingParticlesSkimmer.h \
 	modules/PileUpJetID.h \
 	modules/ConstituentFilter.h \
 	modules/StatusPidFilter.h \
@@ -794,8 +795,9 @@ tmp/modules/StatusPidFilter.$(ObjSuf): \
 	external/ExRootAnalysis/ExRootResult.h \
 	external/ExRootAnalysis/ExRootFilter.h \
 	external/ExRootAnalysis/ExRootClassifier.h
-tmp/modules/TauTagging.$(ObjSuf): \
-	modules/TauTagging.$(SrcSuf) \
+tmp/modules/TaggingParticlesSkimmer.$(ObjSuf): \
+	modules/TaggingParticlesSkimmer.$(SrcSuf) \
+	modules/TaggingParticlesSkimmer.h \
 	modules/TauTagging.h \
 	classes/DelphesClasses.h \
 	classes/DelphesFactory.h \
@@ -803,6 +805,12 @@ tmp/modules/TauTagging.$(ObjSuf): \
 	external/ExRootAnalysis/ExRootResult.h \
 	external/ExRootAnalysis/ExRootFilter.h \
 	external/ExRootAnalysis/ExRootClassifier.h
+tmp/modules/TauTagging.$(ObjSuf): \
+	modules/TauTagging.$(SrcSuf) \
+	modules/TauTagging.h \
+	classes/DelphesClasses.h \
+	classes/DelphesFactory.h \
+	classes/DelphesFormula.h
 tmp/modules/TimeSmearing.$(ObjSuf): \
 	modules/TimeSmearing.$(SrcSuf) \
 	modules/TimeSmearing.h \
@@ -932,6 +940,7 @@ DELPHES_OBJ +=  \
 	tmp/modules/PileUpMerger.$(ObjSuf) \
 	tmp/modules/SimpleCalorimeter.$(ObjSuf) \
 	tmp/modules/StatusPidFilter.$(ObjSuf) \
+	tmp/modules/TaggingParticlesSkimmer.$(ObjSuf) \
 	tmp/modules/TauTagging.$(ObjSuf) \
 	tmp/modules/TimeSmearing.$(ObjSuf) \
 	tmp/modules/TrackCountingBTagging.$(ObjSuf) \
@@ -1118,6 +1127,18 @@ tmp/external/fastjet/contribs/Nsubjettiness/Nsubjettiness.$(ObjSuf): \
 	external/fastjet/contribs/Nsubjettiness/Nsubjettiness.$(SrcSuf)
 tmp/external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.$(ObjSuf): \
 	external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.$(SrcSuf)
+tmp/external/fastjet/contribs/RecursiveTools/ModifiedMassDropTagger.$(ObjSuf): \
+	external/fastjet/contribs/RecursiveTools/ModifiedMassDropTagger.$(SrcSuf) \
+	external/fastjet/JetDefinition.hh \
+	external/fastjet/ClusterSequenceAreaBase.hh
+tmp/external/fastjet/contribs/RecursiveTools/Recluster.$(ObjSuf): \
+	external/fastjet/contribs/RecursiveTools/Recluster.$(SrcSuf)
+tmp/external/fastjet/contribs/RecursiveTools/RecursiveSymmetryCutBase.$(ObjSuf): \
+	external/fastjet/contribs/RecursiveTools/RecursiveSymmetryCutBase.$(SrcSuf) \
+	external/fastjet/JetDefinition.hh \
+	external/fastjet/ClusterSequenceAreaBase.hh
+tmp/external/fastjet/contribs/RecursiveTools/SoftDrop.$(ObjSuf): \
+	external/fastjet/contribs/RecursiveTools/SoftDrop.$(SrcSuf)
 tmp/external/fastjet/contribs/SoftKiller/SoftKiller.$(ObjSuf): \
 	external/fastjet/contribs/SoftKiller/SoftKiller.$(SrcSuf)
 tmp/external/fastjet/plugins/ATLASCone/ATLASConePlugin.$(ObjSuf): \
@@ -1323,6 +1344,10 @@ FASTJET_OBJ +=  \
 	tmp/external/fastjet/contribs/Nsubjettiness/NjettinessPlugin.$(ObjSuf) \
 	tmp/external/fastjet/contribs/Nsubjettiness/Nsubjettiness.$(ObjSuf) \
 	tmp/external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.$(ObjSuf) \
+	tmp/external/fastjet/contribs/RecursiveTools/ModifiedMassDropTagger.$(ObjSuf) \
+	tmp/external/fastjet/contribs/RecursiveTools/Recluster.$(ObjSuf) \
+	tmp/external/fastjet/contribs/RecursiveTools/RecursiveSymmetryCutBase.$(ObjSuf) \
+	tmp/external/fastjet/contribs/RecursiveTools/SoftDrop.$(ObjSuf) \
 	tmp/external/fastjet/contribs/SoftKiller/SoftKiller.$(ObjSuf) \
 	tmp/external/fastjet/plugins/ATLASCone/ATLASConePlugin.$(ObjSuf) \
 	tmp/external/fastjet/plugins/ATLASCone/Jet.$(ObjSuf) \
@@ -1742,7 +1767,10 @@ display/DelphesEventDisplay.h: \
 	@touch $@
 
 modules/TauTagging.h: \
-	classes/DelphesModule.h
+	classes/DelphesModule.h \
+	external/ExRootAnalysis/ExRootResult.h \
+	external/ExRootAnalysis/ExRootFilter.h \
+	external/ExRootAnalysis/ExRootClassifier.h
 	@touch $@
 
 external/fastjet/GhostedAreaSpec.hh: \
@@ -1836,6 +1864,10 @@ display/DelphesPlotSummary.h: \
 	@touch $@
 
 modules/Weighter.h: \
+	classes/DelphesModule.h
+	@touch $@
+
+modules/TaggingParticlesSkimmer.h: \
 	classes/DelphesModule.h
 	@touch $@
 

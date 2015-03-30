@@ -151,7 +151,7 @@ public:
   static CompBase *fgCompare; //!
   const CompBase *GetCompare() const { return fgCompare; }
 
-  TLorentzVector P4();
+  TLorentzVector P4() const;
 
   ClassDef(GenParticle, 1)
 };
@@ -178,7 +178,7 @@ public:
   Float_t Eta; // mising energy pseudorapidity
   Float_t Phi; // mising energy azimuthal angle
 
-  TLorentzVector P4();
+  TLorentzVector P4() const;
 
   ClassDef(MissingET, 1)
 };
@@ -235,7 +235,7 @@ public:
   static CompBase *fgCompare; //!
   const CompBase *GetCompare() const { return fgCompare; }
 
-  TLorentzVector P4();
+  TLorentzVector P4() const;
 
   ClassDef(Photon, 2)
 };
@@ -261,7 +261,7 @@ public:
   static CompBase *fgCompare; //!
   const CompBase *GetCompare() const { return fgCompare; }
 
-  TLorentzVector P4();
+  TLorentzVector P4() const;
 
   ClassDef(Electron, 2)
 };
@@ -285,7 +285,7 @@ public:
   static CompBase *fgCompare; //!
   const CompBase *GetCompare() const { return fgCompare; }
 
-  TLorentzVector P4();
+  TLorentzVector P4() const;
 
   ClassDef(Muon, 2)
 };
@@ -334,7 +334,7 @@ public:
   static CompBase *fgCompare; //!
   const CompBase *GetCompare() const { return fgCompare; }
 
-  TLorentzVector P4();
+  TLorentzVector P4() const;
 
   ClassDef(Jet, 2)
 };
@@ -377,7 +377,7 @@ public:
   static CompBase *fgCompare; //!
   const CompBase *GetCompare() const { return fgCompare; }
 
-  TLorentzVector P4();
+  TLorentzVector P4() const;
 
   ClassDef(Track, 2)
 };
@@ -405,7 +405,7 @@ public:
   static CompBase *fgCompare; //!
   const CompBase *GetCompare() const { return fgCompare; }
 
-  TLorentzVector P4();
+  TLorentzVector P4() const;
 
   ClassDef(Tower, 1)
 };
