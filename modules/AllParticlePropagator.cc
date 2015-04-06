@@ -634,12 +634,12 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		// Now, using sin(epsilon) = sqrt(1-cos(epsilon)**2) loses a lot of
 		// precision, so we're better off using the law of sines:
 		//
-		//        sin(epsilon) = sign(Omega)*AreaOfTriangle/(R_hx * RBeam_hx)
+		//        sin(epsilon) = sign(Omega)*2*AreaOfTriangle/(R_hx * RBeam_hx)
 		//
 		// Thus, to find epsilon, we can use atan2.
 		const Double_t denom = R_hx * RBeam_hx;
 		const Double_t sinEpsilon =
-			copysign(KahanTriangleAreaPreSorted(smallToLargeTriangleSides[2], smallToLargeTriangleSides[1], smallToLargeTriangleSides[0]) / denom,
+			copysign(2 * KahanTriangleAreaPreSorted(smallToLargeTriangleSides[2], smallToLargeTriangleSides[1], smallToLargeTriangleSides[0]) / denom,
 				omegaOverC);
 		// Assume RBeam2_hx > R2_hx > fRadius2
 		const Double_t cosEpsilon = (RBeam2_hx + (R2_hx - fRadius2))/(2*denom);
