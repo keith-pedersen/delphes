@@ -33,6 +33,8 @@
 #include <vector>
 #include <sstream>
 #include <iostream>
+#include <string>
+#include <stdexcept>
 
 #include "TObjArray.h"
 #include "TLorentzVector.h"
@@ -265,7 +267,7 @@ void PixelPicture::Process()
 								else if(pixelValue >= 10)
 									line += "%";
 								else if (pixelValue > 0)
-									line += to_string(pixelValue);
+									line += to_string((long long int)pixelValue);
 								else
 									line += " ";
 							}
