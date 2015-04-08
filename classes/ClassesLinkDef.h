@@ -32,6 +32,7 @@
 
 #include "classes/SortableObject.h"
 #include "classes/DelphesClasses.h"
+#include "classes/PythiaParticle.h"
 
 #ifdef __CINT__
 
@@ -63,6 +64,9 @@
 #pragma link C++ class HectorHit+;
 
 #pragma link C++ class Candidate+;
+
+//KDP
+#pragma link C++ class PythiaParticle+;
 
 #endif
 
