@@ -38,8 +38,8 @@ using namespace std;
 
 //------------------------------------------------------------------------------
 
-DelphesFactory::DelphesFactory(const char *name, const char *runName_in) :
-  TNamed(name, ""), runName(runName_in), fObjArrays(0)
+DelphesFactory::DelphesFactory(const char *name) :
+  TNamed(name, ""), fObjArrays(0)
 {
   fObjArrays = new ExRootTreeBranch("PermanentObjArrays", TObjArray::Class(), 0);
 }

@@ -293,9 +293,12 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				// For more information on this error, see #5 in the class description in the header file
 			}
 
-			// For double precision, machine epsilon ~= 1.1E-16. Thus, we don't
-			// have to worry about Beta losing resolution until we're
-			// dealing with gamma > 10^7  (e.g. a {5 TeV e+} or a {1.4 PeV pi+})
+			// This maximum representable non-infinite gamma is gammaMax = 1/sqrt(MachineEpsilon).
+			// For double precision, MachineEpsilon ~= 1.1E-16, so gammaMax = 9.5e7.
+			// Thus, until we start dealing with gamma > 10^7, we don't have to
+			// worry about beta losing precision (and also not unless the particle
+			// is completely parallel to one of the axes). This works out to
+			// a {5 TeV e+} or a {1.4 PeV pi+})
 			const VecXY r0Beta( momentum.Px()/energy, momentum.Py()/energy );
 			const Double_t R0Beta2 = r0Beta.Norm2(); // Transverse beta (used throughout instead of pT)
 			const Double_t z0Beta = momentum.Pz()/energy;

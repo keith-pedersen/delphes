@@ -58,11 +58,11 @@
 
 using namespace std;
 
-Delphes::Delphes(const char *name, const char* runName_in) :
+Delphes::Delphes(const char *name) :
   fFactory(0)
 {
   TFolder *folder = new TFolder(name, "");
-  fFactory = new DelphesFactory("ObjectFactory", runName_in);
+  fFactory = new DelphesFactory("ObjectFactory");
 
   SetName(name);
   SetFolder(folder);
