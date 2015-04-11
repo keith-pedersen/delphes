@@ -440,7 +440,7 @@ void HighPtBTagger::WriteMotherPIDHisto()
 	for(std::map<Int_t, Int_t>::const_iterator itPID = pdgID.begin(); itPID not_eq pdgID.end(); ++itPID)
 	{
 		motherPID->SetBinContent(binNumber, itPID->second);
-		xAxis->SetBinLabel(binNumber, to_string(itPID->first).c_str());
+		xAxis->SetBinLabel(binNumber, to_string((long long int)itPID->first).c_str());
 		++binNumber;
 	}
 }
