@@ -52,6 +52,8 @@
 
 using namespace std;
 
+const Double_t TreeWriter::c_light = 2.99792458E8;
+
 //------------------------------------------------------------------------------
 
 TreeWriter::TreeWriter()
@@ -87,6 +89,8 @@ void TreeWriter::Init()
 
   // read branch configuration and
   // import array with output from filter/classifier/jetfinder modules
+
+  fTimeInSeconds = GetBool("TimeInSeconds", kFALSE);
 
   ExRootConfParam param = GetParam("Branch");
   Long_t i, size;
@@ -133,35 +137,50 @@ void TreeWriter::Finish()
 
 //------------------------------------------------------------------------------
 
+// This function operates on Towers, Photons (also Towers), and Jets, which each contain
+// diferent objects in their fArray
+// * Towers contain propagated generator level particles
+// * Jets contain a list of towers and tracks
+//     * Tracks contain a history of alteration (original particle, propagated particle, momentum smeared particle, etc.)
+//
+// Because AllParticlePropagator behaves differently than ParticlePropagator
+// (it does not create a new object for the propagated particle), this function
+// had to be rewritten so that it is compatible with both modules.
+// Basically, we need a way of distinguishing towers and tracks. The
+// easiest way to do this is by assuming (this should be a good assumption,
+// if the program is properly configured) that towers have zero charge,
+// but tracks have non-zero charge.
 void TreeWriter::FillParticles(Candidate *candidate, TRefArray *array)
 {
-  TIter it1(candidate->GetCandidates());
-  it1.Reset();
+  TIter itConstituent(candidate->GetCandidates());
+  itConstituent.Reset();
   array->Clear();
-  while((candidate = static_cast<Candidate*>(it1.Next())))
+
+  while((candidate = static_cast<Candidate*>(itConstituent.Next())))
   {
-    TIter it2(candidate->GetCandidates());
-
-    // particle
-    if(candidate->GetCandidates()->GetEntriesFast() == 0)
+    // The constituent is a Particle (it's fArray is uninitialized, so it is therefore empty)
+    if(not candidate->HasCandidates())
     {
       array->Add(candidate);
       continue;
     }
 
-    // track
-    candidate = static_cast<Candidate*>(candidate->GetCandidates()->At(0));
-    if(candidate->GetCandidates()->GetEntriesFast() == 0)
+    // The constituent is a Track (so store the very first Candidate* in it's history)
+    if(candidate->Charge not_eq 0.)
     {
-      array->Add(candidate);
-      continue;
-    }
+		 array->Add(static_cast<Candidate*>(candidate->GetCandidates()->At(0)));
+		 continue;
+	 }
 
-    // tower
-    it2.Reset();
-    while((candidate = static_cast<Candidate*>(it2.Next())))
+	 // Otherwise the constituent is a tower, so store each of it's constituents
+	 TIter itTower(candidate->GetCandidates());
+	 itTower.Reset();
+	 while((candidate = static_cast<Candidate*>(itTower.Next())))
     {
-      array->Add(candidate->GetCandidates()->At(0));
+		if(candidate->HasCandidates())
+			array->Add(candidate->GetCandidates()->At(0));
+		else
+			array->Add(candidate);
     }
   }
 }
@@ -175,8 +194,6 @@ void TreeWriter::ProcessParticles(ExRootTreeBranch *branch, TObjArray *array)
   GenParticle *entry = 0;
   Double_t pt, signPz, cosTheta, eta, rapidity;
 
-  const Double_t c_light = 2.99792458E8;
-
   // loop over all particles
   iterator.Reset();
   while((candidate = static_cast<Candidate*>(iterator.Next())))
@@ -189,6 +206,9 @@ void TreeWriter::ProcessParticles(ExRootTreeBranch *branch, TObjArray *array)
     entry->SetBit(kIsReferenced);
     entry->SetUniqueID(candidate->GetUniqueID());
 
+    // KDP: TLorentzVector already does the error checking (which is unneccessary,
+	 // what's wrong with +/- inf?, since such a pseudorapidity isn't measureable
+	 // anyway?). Error checking here prevents ROOT from spitting out an error message.
     pt = momentum.Pt();
     cosTheta = TMath::Abs(momentum.CosTheta());
     signPz = (momentum.Pz() >= 0.0) ? 1.0 : -1.0;
@@ -220,10 +240,17 @@ void TreeWriter::ProcessParticles(ExRootTreeBranch *branch, TObjArray *array)
 
     entry->Rapidity = rapidity;
 
+    entry->CreationRadius = candidate->CreationRadius;
+
+    // KDP: From AllParticlePropagator, the final position is stored in Position (initial position in Area)
+    // Store final position
+    entry->T = position.T();
     entry->X = position.X();
     entry->Y = position.Y();
     entry->Z = position.Z();
-    entry->T = position.T()*1.0E-3/c_light;
+
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
   }
 }
 
@@ -234,8 +261,6 @@ void TreeWriter::ProcessVertices(ExRootTreeBranch *branch, TObjArray *array)
   TIter iterator(array);
   Candidate *candidate = 0;
   Vertex *entry = 0;
-
-  const Double_t c_light = 2.99792458E8;
 
   // loop over all vertices
   iterator.Reset();
@@ -248,7 +273,9 @@ void TreeWriter::ProcessVertices(ExRootTreeBranch *branch, TObjArray *array)
     entry->X = position.X();
     entry->Y = position.Y();
     entry->Z = position.Z();
-    entry->T = position.T()*1.0E-3/c_light;
+    entry->T = position.T();
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
   }
 }
 
@@ -261,7 +288,6 @@ void TreeWriter::ProcessTracks(ExRootTreeBranch *branch, TObjArray *array)
   Candidate *particle = 0;
   Track *entry = 0;
   Double_t pt, signz, cosTheta, eta, rapidity;
-  const Double_t c_light = 2.99792458E8;
 
   // loop over all tracks
   iterator.Reset();
@@ -289,14 +315,16 @@ void TreeWriter::ProcessTracks(ExRootTreeBranch *branch, TObjArray *array)
     entry->XOuter = position.X();
     entry->YOuter = position.Y();
     entry->ZOuter = position.Z();
-    entry->TOuter = position.T()*1.0E-3/c_light;
-    
+    entry->TOuter = position.T();
+    if(fTimeInSeconds)
+       entry->TOuter *= 1.0E-3/c_light;
+
     entry->Dxy = candidate->Dxy;
     entry->SDxy = candidate->SDxy ;
     entry->Xd = candidate->Xd;
     entry->Yd = candidate->Yd;
     entry->Zd = candidate->Zd;
-   
+
     const TLorentzVector &momentum = candidate->Momentum;
 
     pt = momentum.Pt();
@@ -310,12 +338,16 @@ void TreeWriter::ProcessTracks(ExRootTreeBranch *branch, TObjArray *array)
     entry->PT = pt;
 
     particle = static_cast<Candidate*>(candidate->GetCandidates()->At(0));
-    const TLorentzVector &initialPosition = particle->Position;
+    // KDP: From AllParticlePropagator, the final position is stored in Position (initial position in Area)
+    //const TLorentzVector &initialPosition = particle->Position;
+    const TLorentzVector &initialPosition = particle->Area;
 
     entry->X = initialPosition.X();
     entry->Y = initialPosition.Y();
     entry->Z = initialPosition.Z();
-    entry->T = initialPosition.T()*1.0E-3/c_light;
+    entry->T = initialPosition.T();
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
 
     entry->Particle = particle;
   }
@@ -329,7 +361,6 @@ void TreeWriter::ProcessTowers(ExRootTreeBranch *branch, TObjArray *array)
   Candidate *candidate = 0;
   Tower *entry = 0;
   Double_t pt, signPz, cosTheta, eta, rapidity;
-  const Double_t c_light = 2.99792458E8;
 
   // loop over all towers
   iterator.Reset();
@@ -360,7 +391,9 @@ void TreeWriter::ProcessTowers(ExRootTreeBranch *branch, TObjArray *array)
     entry->Edges[2] = candidate->Edges[2];
     entry->Edges[3] = candidate->Edges[3];
 
-    entry->T = position.T()*1.0E-3/c_light;
+    entry->T = position.T();
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
 
     FillParticles(candidate, &entry->Particles);
   }
@@ -374,7 +407,6 @@ void TreeWriter::ProcessPhotons(ExRootTreeBranch *branch, TObjArray *array)
   Candidate *candidate = 0;
   Photon *entry = 0;
   Double_t pt, signPz, cosTheta, eta, rapidity;
-  const Double_t c_light = 2.99792458E8;
 
   array->Sort();
 
@@ -400,7 +432,9 @@ void TreeWriter::ProcessPhotons(ExRootTreeBranch *branch, TObjArray *array)
     entry->PT = pt;
     entry->E = momentum.E();
 
-    entry->T = position.T()*1.0E-3/c_light;
+    entry->T = position.T();
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
 
     entry->EhadOverEem = candidate->Eem > 0.0 ? candidate->Ehad/candidate->Eem : 999.9;
 
@@ -416,7 +450,6 @@ void TreeWriter::ProcessElectrons(ExRootTreeBranch *branch, TObjArray *array)
   Candidate *candidate = 0;
   Electron *entry = 0;
   Double_t pt, signPz, cosTheta, eta, rapidity;
-  const Double_t c_light = 2.99792458E8;
 
   array->Sort();
 
@@ -439,7 +472,9 @@ void TreeWriter::ProcessElectrons(ExRootTreeBranch *branch, TObjArray *array)
     entry->Phi = momentum.Phi();
     entry->PT = pt;
 
-    entry->T = position.T()*1.0E-3/c_light;
+    entry->T = position.T();
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
 
     entry->Charge = candidate->Charge;
 
@@ -457,8 +492,6 @@ void TreeWriter::ProcessMuons(ExRootTreeBranch *branch, TObjArray *array)
   Candidate *candidate = 0;
   Muon *entry = 0;
   Double_t pt, signPz, cosTheta, eta, rapidity;
-
-  const Double_t c_light = 2.99792458E8;
 
   array->Sort();
 
@@ -485,7 +518,9 @@ void TreeWriter::ProcessMuons(ExRootTreeBranch *branch, TObjArray *array)
     entry->Phi = momentum.Phi();
     entry->PT = pt;
 
-    entry->T = position.T()*1.0E-3/c_light;
+    entry->T = position.T();
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
 
     entry->Charge = candidate->Charge;
 
@@ -502,7 +537,6 @@ void TreeWriter::ProcessJets(ExRootTreeBranch *branch, TObjArray *array)
   Jet *entry = 0;
   Double_t pt, signPz, cosTheta, eta, rapidity;
   Double_t ecalEnergy, hcalEnergy;
-  const Double_t c_light = 2.99792458E8;
 
   array->Sort();
 
@@ -527,7 +561,9 @@ void TreeWriter::ProcessJets(ExRootTreeBranch *branch, TObjArray *array)
     entry->Phi = momentum.Phi();
     entry->PT = pt;
 
-    entry->T = position.T()*1.0E-3/c_light;
+    entry->T = position.T();
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
 
     entry->Mass = momentum.M();
 
@@ -565,15 +601,15 @@ void TreeWriter::ProcessJets(ExRootTreeBranch *branch, TObjArray *array)
     entry->FracPt[2] = candidate->FracPt[2];
     entry->FracPt[3] = candidate->FracPt[3];
     entry->FracPt[4] = candidate->FracPt[4];
-   
+
     //--- N-subjettiness variables ----
-    
+
     entry->Tau1 = candidate->Tau[0];
     entry->Tau2 = candidate->Tau[1];
     entry->Tau3 = candidate->Tau[2];
     entry->Tau4 = candidate->Tau[3];
     entry->Tau5 = candidate->Tau[4];
-   
+
     FillParticles(candidate, &entry->Particles);
   }
 }
@@ -679,6 +715,8 @@ void TreeWriter::ProcessHectorHit(ExRootTreeBranch *branch, TObjArray *array)
     entry->Ty = momentum.Py();
 
     entry->T = position.T();
+    if(fTimeInSeconds)
+       entry->T *= 1.0E-3/c_light;
 
     entry->X = position.X();
     entry->Y = position.Y();

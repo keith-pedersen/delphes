@@ -73,6 +73,12 @@ private:
 
   typedef std::map< ExRootTreeBranch *, std::pair< TProcessMethod, TObjArray * > > TBranchMap; //!
 
+  static const Double_t c_light; // Make this static, instead of defining in every function
+  // creating the possibility for an unnoticed typo
+
+  // Flag used to store time in seconds (as opposed to using units of distance)
+  Bool_t fTimeInSeconds;
+
   TBranchMap fBranchMap; //!
 
   std::map< TClass *, TProcessMethod > fClassMap; //!

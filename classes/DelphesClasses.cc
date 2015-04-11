@@ -116,8 +116,8 @@ TLorentzVector Tower::P4() const
 
 //------------------------------------------------------------------------------
 
-// The field TrackLength is used as a flag for AllParticlePropagator to 
-// indicate which particles have been processed (if TrackLength < 0, the 
+// The field TrackLength is used as a flag for AllParticlePropagator to
+// indicate which particles have been processed (if TrackLength < 0, the
 // particle hasn't been processed yet). Thus, TrackLength should
 // be initialized to TrackLength_UnprocessedFlag
 const Double_t Candidate::TrackLength_UnprocessedFlag = -1.;
@@ -172,6 +172,16 @@ TObjArray *Candidate::GetCandidates()
 {
   if(!fArray) fArray = fFactory->NewArray();
   return fArray;
+}
+
+//------------------------------------------------------------------------------
+
+Bool_t Candidate::HasCandidates()
+{
+	if(fArray and (fArray->GetEntriesFast() > 0))
+		return kTRUE;
+	else
+		return kFALSE;
 }
 
 //------------------------------------------------------------------------------
