@@ -895,7 +895,9 @@ void HighPtBTagger::Process()
 					{
 						if(coreMinX[iCore] <= fMaxEmissionInvariant)
 						{
-							jet->BTag |= (1 << fBitNumber);
+							// Only tag jets from the minCore
+							if(minCoreIsHardCore or iCore == 1)
+								jet->BTag |= (1 << fBitNumber);
 
 							FillTH1F(pt_Tagged, iCore, coreFlavor, jetPt);
 							if(minCoreIsHardCore)
