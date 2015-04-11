@@ -143,6 +143,8 @@ public:
 
   Float_t Rapidity; // particle rapidity
 
+  Float_t CreationRadius; // KDP extra field since I will store final position in TXYZ
+
   Float_t T; // particle vertex position (t component) | hepevt.vhep[number][3]
   Float_t X; // particle vertex position (x component) | hepevt.vhep[number][0]
   Float_t Y; // particle vertex position (y component) | hepevt.vhep[number][1]
@@ -314,13 +316,13 @@ public:
 
   Float_t EhadOverEem; // ratio of the hadronic versus electromagnetic energy deposited in the calorimeter
 
-  Int_t    NCharged; // number of charged constituents 
-  Int_t    NNeutrals; // number of neutral constituents 
-  Float_t  Beta; // (sum pt of charged pile-up constituents)/(sum pt of charged constituents) 
-  Float_t  BetaStar; // (sum pt of charged constituents coming from hard interaction)/(sum pt of charged constituents) 
+  Int_t    NCharged; // number of charged constituents
+  Int_t    NNeutrals; // number of neutral constituents
+  Float_t  Beta; // (sum pt of charged pile-up constituents)/(sum pt of charged constituents)
+  Float_t  BetaStar; // (sum pt of charged constituents coming from hard interaction)/(sum pt of charged constituents)
   Float_t  MeanSqDeltaR; // average distance (squared) between constituent and jet weighted by pt (squared) of constituent
   Float_t  PTD; // average pt between constituent and jet weighted by pt of constituent
-  Float_t  FracPt[5]; // (sum pt of constituents within a ring 0.1*i < DeltaR < 0.1*(i+1))/(sum pt of constituents) 
+  Float_t  FracPt[5]; // (sum pt of constituents within a ring 0.1*i < DeltaR < 0.1*(i+1))/(sum pt of constituents)
 
   Float_t Tau1; // 1-subjettiness
   Float_t Tau2; // 2-subjettiness
@@ -451,11 +453,11 @@ public:
   Int_t Charge;
 
   Float_t Mass;
-  
+
   // <KDP>
   // 3 new fields for use by AllParticlePropagator
   Float_t CTau; // Particle actual (not average) proper lifetime (in mm)
-  Float_t CreationRadius; 
+  Float_t CreationRadius;
   Float_t TrackLength; // Also a flag! When negative, partice not propagated yet.
   static const Double_t TrackLength_UnprocessedFlag;
 
@@ -499,6 +501,7 @@ public:
 
   void AddCandidate(Candidate *object);
   TObjArray *GetCandidates();
+  Bool_t HasCandidates(); // Simple overload to check for constituents without creating empty array
 
   Bool_t Overlaps(const Candidate *object) const;
 

@@ -294,7 +294,8 @@ tmp/classes/ClassesDict.$(SrcSuf): \
 	classes/DelphesModule.h \
 	classes/DelphesFactory.h \
 	classes/SortableObject.h \
-	classes/DelphesClasses.h
+	classes/DelphesClasses.h \
+	classes/PythiaParticle.h
 ClassesDict$(PcmSuf): \
 	tmp/classes/ClassesDict$(PcmSuf) \
 	tmp/classes/ClassesDict.$(SrcSuf)

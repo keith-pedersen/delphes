@@ -13,6 +13,7 @@ DELPHES_GENERATE_DICTIONARY(ClassesDict
   ${CMAKE_CURRENT_SOURCE_DIR}/DelphesFactory.h
   ${CMAKE_CURRENT_SOURCE_DIR}/SortableObject.h
   ${CMAKE_CURRENT_SOURCE_DIR}/DelphesClasses.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/PythiaParticle.h
   LINKDEF ClassesLinkDef.h
 )
 
