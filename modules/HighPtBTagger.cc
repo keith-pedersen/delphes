@@ -209,10 +209,10 @@ void HighPtBTagger::Init()
 	//histoFile = new TFile("HighPtBTagger_histos.root", "recreate");
 
 	const Double_t
-		ptMax_jet = 2000.,
-		ptWidth_jet = 20.,
+		ptMax_jet = 2100.,
+		ptWidth_jet = 50.,
 
-		ptMax_muon = 1000.,
+		ptMax_muon = 1500.,
 		ptWidth_muon = 5.,
 
 		massMin = 1e-1,
@@ -224,6 +224,8 @@ void HighPtBTagger::Init()
 		coreRatioMin = 0.,
 		coreRatioMax = 1.,
 
+		absEtaMax = 2.7,
+
 		angleMin = 4e-4,
 		angleMax = .4;
 
@@ -233,6 +235,7 @@ void HighPtBTagger::Init()
 		numBins_mass = 100,
 		numBins_invariant = 100,
 		numBins_coreRatio = 50,
+		numBins_eta = 21,
 		numBins_angle = 50;
 
 	// Array of lower edges (+ total upper edge) for mass and invariant
@@ -279,7 +282,10 @@ void HighPtBTagger::Init()
 
 		pt_Jets = new TH1I("pt_Jets", "Jets vs. pt_Jet (GeV)",
 			numBins_jetPt, fMinJetPt, ptMax_jet);
-		pt_Jets->Sumw2();
+		//pt_Jets->Sumw2();
+
+		eta_Jets = new TH1I("eta_Jets", "Jets vs. eta_Jet (GeV)",
+			numBins_eta, -absEtaMax, absEtaMax);
 
 		pt_Muons = new TH1I("pt_Muons", "Muons (in jets above threshold) vs. pt_Muon (GeV)",
 			numBins_muonPt, fMinMuonPt, ptMax_muon);
@@ -300,12 +306,23 @@ void HighPtBTagger::Init()
 
 		{
 			TDirectory* pt_muJetsDir = gDirectory->mkdir("pt_muJets");
-			TDirectory::TContext cd_xTrue(pt_muJetsDir);
+			TDirectory::TContext cd_pt(pt_muJetsDir);
 
 			for(std::vector<string>::const_iterator itLabel = labels.begin(); itLabel not_eq labels.end(); ++itLabel)
 			{
 				pt_MuJets.push_back(NewTH<TH1F>(*itLabel, "pt_MuJets", "% MuJet (Jet with muons) vs. pt_Jet (GeV)  Matriarch: ", numBins_jetPt, fMinJetPt, ptMax_jet));
-				pt_MuJets.back()->Sumw2();
+				//pt_MuJets.back()->Sumw2();
+			}
+		}
+
+		{
+			TDirectory* eta_muJetsDir = gDirectory->mkdir("eta_muJets");
+			TDirectory::TContext cd_eta(eta_muJetsDir);
+
+			for(std::vector<string>::const_iterator itLabel = labels.begin(); itLabel not_eq labels.end(); ++itLabel)
+			{
+				eta_MuJets.push_back(NewTH<TH1F>(*itLabel, "eta_MuJets", "% MuJet (Jet with muons) vs. eta_Jet (GeV)  Matriarch: ", numBins_eta, -absEtaMax, absEtaMax));
+				//pt_MuJets.back()->Sumw2();
 			}
 		}
 
@@ -348,9 +365,13 @@ void HighPtBTagger::Init()
 			pt_Tagged.push_back(
 				NewTHVec<TH1F>(labels, hardcoreDirVec, "pt_Tagged_HardCore", "% MuJets (HardCore) Tagged vs. pt_MuJet (GeV)",
 				numBins_jetPt, fMinJetPt, ptMax_jet));
-
+			/*
 			for(std::vector<TH1F*>::iterator itTagged = pt_Tagged.back().begin(); itTagged not_eq pt_Tagged.back().end(); ++itTagged)
-				(*itTagged)->Sumw2();
+				(*itTagged)->Sumw2();*/
+
+			eta_Tagged.push_back(
+				NewTHVec<TH1F>(labels, hardcoreDirVec, "eta_Tagged_HardCore", "% MuJets (HardCore) Tagged vs. eta_MuJet (GeV)",
+				numBins_eta, -absEtaMax, absEtaMax));
 
 			// 2D Histograms
 			x_Core__vs__x_True.push_back(
@@ -401,9 +422,13 @@ void HighPtBTagger::Init()
 			pt_Tagged.push_back(
 				NewTHVec<TH1F>(labels, mincoreDirVec, "pt_Tagged_MinCore", "% MuJets (MinCore) Tagged vs. pt_MuJet (GeV)",
 				numBins_jetPt, fMinJetPt, ptMax_jet));
-
+			/*
 			for(std::vector<TH1F*>::iterator itTagged = pt_Tagged.back().begin(); itTagged not_eq pt_Tagged.back().end(); ++itTagged)
-				(*itTagged)->Sumw2();
+				(*itTagged)->Sumw2();*/
+
+			eta_Tagged.push_back(
+				NewTHVec<TH1F>(labels, mincoreDirVec, "eta_Tagged_MinCore", "% MuJets (MinCore) Tagged vs. eta_MuJet (GeV)",
+				numBins_eta, -absEtaMax, absEtaMax));
 
 			x_Core__vs__x_True.push_back(
 				NewTHVec<TH2F>(labels, mincoreDirVec, "x_MinCore__vs__x_True", "Muons vs. x(muon, MinCore) vs. x(muon, boosted matriarch)",
@@ -451,6 +476,9 @@ void HighPtBTagger::Finish()
 {
 	WriteMotherPIDHisto();
 
+	// No division anymore, since we need to add multiple runs
+	/*
+
 	// Turn the percent histos into percent histos
 	for(std::vector<std::vector<TH1F*> >::iterator itCore = pt_Tagged.begin(); itCore not_eq pt_Tagged.end(); ++itCore)
 	{
@@ -464,6 +492,7 @@ void HighPtBTagger::Finish()
 	{
 		pt_MuJets[iFlavor]->Divide(pt_Jets);
 	}
+	*/
 
 	delete fCoreDefinition;
 	delete fItJetInputArray;
@@ -870,15 +899,20 @@ void HighPtBTagger::Process()
 					}// End valid subjets
 				}// End Reclustering
 
-				const Double_t jetPt = (jet->Momentum).Pt();
+				const Double_t
+					jetPt = (jet->Momentum).Pt(),
+					jetEta = (jet->Momentum).Eta();
+
 				bool minCoreIsHardCore = (coreP4Vec.size() == 1);
 
 				for(unsigned int iCore = 0; iCore < coreP4Vec.size(); ++iCore)
 				{
-					if(iCore == 0)
+					if(iCore == 0) // The HardCore is in charge of filling these histos
 					{
 						pt_MuJets[0]->Fill(jetPt);
 						pt_MuJets[flavorToHistoIndex[coreFlavor]]->Fill(jetPt);
+						eta_MuJets[0]->Fill(jetEta);
+						eta_MuJets[flavorToHistoIndex[coreFlavor]]->Fill(jetEta);
 					}
 
 					const Double_t core_Ratio = coreP4Vec[iCore].Pt() / jetPt;
@@ -900,14 +934,19 @@ void HighPtBTagger::Process()
 								jet->BTag |= (1 << fBitNumber);
 
 							FillTH1F(pt_Tagged, iCore, coreFlavor, jetPt);
+							FillTH1F(eta_Tagged, iCore, coreFlavor, jetEta);
 							if(minCoreIsHardCore)
+							{
 								FillTH1F(pt_Tagged, 1, coreFlavor, jetPt);
+								FillTH1F(eta_Tagged, 1, coreFlavor, jetEta);
+							}
 						}//End tagged
 					}//End core is hard enough
 				}//End loop through cores
 			}//End muon pt cut
 
 			pt_Jets->Fill((jet->Momentum).Pt());
+			eta_Jets->Fill((jet->Momentum).Eta());
 		}//End jet initial pt cut
 	}//End loop over jets
 }

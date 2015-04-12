@@ -125,6 +125,7 @@ class HighPtBTagger: public DelphesModule
 
 		TH1I
 			*pt_Jets,
+			*eta_Jets,
 			*pt_Muons,
 			*motherPID;
 
@@ -134,7 +135,8 @@ class HighPtBTagger: public DelphesModule
 		//     x_True[motherFlavor]
 		std::vector<TH1F*>
 			x_True,
-			pt_MuJets;
+			pt_MuJets,
+			eta_MuJets;
 
 		// These histograms depend on core reconstruction, and the core's matriarch
 		//     histoVec[coreIndex][matriarchFlavor]
@@ -149,7 +151,8 @@ class HighPtBTagger: public DelphesModule
 			x_Core,
 			deltaTrue,
 			deltaTrue2Mu,
-			pt_Tagged;
+			pt_Tagged,
+			eta_Tagged;
 
 		std::vector<std::vector<TH2F*> >
 			x_Core__vs__x_True,
