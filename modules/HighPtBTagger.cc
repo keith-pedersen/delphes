@@ -644,10 +644,14 @@ void HighPtBTagger::Process()
 											goodMuonsMotherFlavor.push_back(flavor(absPossibleMatriarchPID));
 										}
 
-										if((possibleMatriarch->M2 not_eq 0) or
+										if( (not ((possibleMatriarch->M2 == 0) or (possibleMatriarch->M2 == possibleMatriarch->M1))) or
 											((absPossibleMatriarchPID >= 22) and (absPossibleMatriarchPID <= 24)))
 										{
-											// Safety check for primary muons (A, Z, W)
+											// First check (post hadronic)
+											// Post hadronic decays should have a M2 == 0 or (in the case of interaction
+											// with the vacuum) M1 == M2. Anthing else and we've reached back into color charge
+
+											// Second check for primary muons (A, Z, W)
 											// Pythia hadronic decay never specifically invokes a W; hence,
 											// if this is a W, it must have come from the hard interaction.
 											// By breaking here, we treat the A/Z/W as the original mother
