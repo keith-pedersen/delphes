@@ -1,7 +1,12 @@
-#ifndef PYTHIA_PARTICLE
-#define PYTHIA_PARTICLE
+// Created this file here to re-use the Delphes machinery to generate the Root dictionary
+
+#ifndef KDP_CLASSES
+#define KDP_CLASSES
 
 #include "TObject.h"
+
+class TLorentzVector;
+class CompBase;
 
 // KDP
 // This class is designed to store information from a Pythia run
@@ -46,6 +51,66 @@ class PythiaParticle : public TObject
 		Kinematic_t CTau; // The actual decay lifetime (in the rest frame)
 
 		ClassDef(PythiaParticle, 1)
+};
+
+class TaggingEfficiencyJet : public SortableObject
+{
+	public:
+		typedef Float_t Kinematic_t;
+		typedef UChar_t Tag_t;
+
+		Kinematic_t PT; // jet transverse momentum
+		Kinematic_t Eta; // jet pseudorapidity
+		Kinematic_t Phi; // jet azimuthal angle
+
+		Kinematic_t Mass; // jet invariant mass
+		Kinematic_t EhadOverEem; // ratio of the hadronic versus electromagnetic energy deposited in the calorimeter
+
+		Kinematic_t HardCoreRatio;
+		Kinematic_t MinCoreRatio;
+
+		//Tag_t BTag; // 0 or 1 for a jet that has been tagged as containing a heavy quark
+		//Tag_t MatriarchFlavor; // 0 or 1 for a jet that has been tagged as containing a heavy quark
+
+		TRefArray Muons; // references to muons
+
+		static CompBase *fgCompare; //!
+		const CompBase *GetCompare() const { return fgCompare; }
+
+		TLorentzVector P4() const;
+
+		ClassDef(TaggingEfficiencyJet, 1)
+};
+
+class TaggingEfficiencyMuon: public SortableObject
+{
+	public:
+		typedef Float_t Kinematic_t;
+		typedef Char_t  Charge_t;
+		typedef UChar_t Tag_t;
+
+		Kinematic_t PT; // muon transverse momentum
+		Kinematic_t Eta; // muon pseudorapidity
+		Kinematic_t Phi; // muon azimuthal angle
+
+		// x to various objects
+		Kinematic_t xHardCore;
+		Kinematic_t xMinCore;
+		Kinematic_t xTrue;
+
+		Charge_t Charge; // muon charge
+
+		Tag_t MotherFlavor;
+		Tag_t MatriarchFlavor;
+
+		const static Float_t Mass;
+
+		static CompBase *fgCompare; //!
+		const CompBase *GetCompare() const { return fgCompare; }
+
+		TLorentzVector P4() const;
+
+		ClassDef(TaggingEfficiencyMuon, 1)
 };
 
 #endif
