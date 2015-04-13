@@ -24,7 +24,7 @@
  *  \author P. Demin - UCL, Louvain-la-Neuve
  *
  */
- 
+
 //KDP  (Event -> TimedEvent) to prevent confusion with Pythia8::Event
 
 #include "classes/DelphesModule.h"
@@ -32,7 +32,7 @@
 
 #include "classes/SortableObject.h"
 #include "classes/DelphesClasses.h"
-#include "classes/PythiaParticle.h"
+#include "classes/KDPClasses.h"
 
 #ifdef __CINT__
 

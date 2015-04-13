@@ -295,7 +295,7 @@ tmp/classes/ClassesDict.$(SrcSuf): \
 	classes/DelphesFactory.h \
 	classes/SortableObject.h \
 	classes/DelphesClasses.h \
-	classes/PythiaParticle.h
+	classes/KDPClasses.h
 ClassesDict$(PcmSuf): \
 	tmp/classes/ClassesDict$(PcmSuf) \
 	tmp/classes/ClassesDict.$(SrcSuf)
@@ -400,6 +400,11 @@ DISPLAY_DICT_PCM +=  \
 tmp/classes/DelphesClasses.$(ObjSuf): \
 	classes/DelphesClasses.$(SrcSuf) \
 	classes/DelphesClasses.h \
+	classes/DelphesFactory.h \
+	classes/SortableObject.h
+tmp/classes/KDPClasses.$(ObjSuf): \
+	classes/KDPClasses.$(SrcSuf) \
+	classes/KDPClasses.h \
 	classes/DelphesFactory.h \
 	classes/SortableObject.h
 tmp/classes/DelphesFactory.$(ObjSuf): \
