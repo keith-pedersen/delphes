@@ -67,6 +67,8 @@
 
 //KDP
 #pragma link C++ class PythiaParticle+;
+#pragma link C++ class TaggingEfficiencyJet+;
+#pragma link C++ class TaggingEfficiencyMuon+;
 
 #endif
 

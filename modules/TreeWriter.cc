@@ -30,6 +30,7 @@
 #include "classes/DelphesClasses.h"
 #include "classes/DelphesFactory.h"
 #include "classes/DelphesFormula.h"
+#include "classes/KDPClasses.h"
 
 #include "ExRootAnalysis/ExRootResult.h"
 #include "ExRootAnalysis/ExRootFilter.h"
@@ -83,6 +84,10 @@ void TreeWriter::Init()
   fClassMap[Rho::Class()] = &TreeWriter::ProcessRho;
   fClassMap[Weight::Class()] = &TreeWriter::ProcessWeight;
   fClassMap[HectorHit::Class()] = &TreeWriter::ProcessHectorHit;
+
+  //KDP Classes
+  fClassMap[TaggingEfficiencyJet::Class()] = &TreeWriter::ProcessTaggingEfficiencyJet;
+  fClassMap[TaggingEfficiencyMuon::Class()] = &TreeWriter::ProcessTaggingEfficiencyMuon;
 
   TBranchMap::iterator itBranchMap;
   map< TClass *, TProcessMethod >::iterator itClassMap;
@@ -746,3 +751,92 @@ void TreeWriter::Process()
 }
 
 //------------------------------------------------------------------------------
+
+void TreeWriter::ProcessTaggingEfficiencyJet(ExRootTreeBranch *branch, TObjArray *array)
+{
+	TIter iterator(array);
+	Candidate* candidate = 0;
+	TaggingEfficiencyJet* entry = 0;
+
+	while((candidate = static_cast<Candidate*>(iterator.Next())))
+	{
+		entry = static_cast<TaggingEfficiencyJet*>(branch->NewEntry());
+
+		entry->PT = (candidate->Momentum).Pt();
+		entry->Eta = (candidate->Momentum).Eta();
+		entry->Phi = (candidate->Momentum).Phi();
+		entry->Mass = (candidate->Momentum).M();
+
+		//cout << candidate->FracPt[0] << "\n";
+
+		entry->HardCoreRatio = candidate->FracPt[0];
+		entry->MinCoreRatio = candidate->FracPt[1];
+
+		entry->BTag = candidate->BTag;
+
+		//const UInt_t goodMuonsInJet = candidate->TauTag;
+		//UInt_t goodMuonsFound = 0;
+		Float_t
+			Eem = 0.,
+			Ehad = 0.;
+
+		TIter itConstituents(candidate->GetCandidates());
+		Candidate* constituent;
+
+		while((constituent = static_cast<Candidate*>(itConstituents.Next())))
+		//and goodMuonsFound < goodMuonsInJet)
+		{
+			if(constituent->Charge not_eq 0.)
+			{
+				// We assume that none of the other constituents have their BTag field messed with
+				if(constituent->BTag > 0)
+				{
+					(entry->Muons).Add(constituent);
+					//++goodMuonsFound;
+				}
+			}
+			else
+			{
+				Eem += constituent->Eem;
+				Ehad += constituent->Ehad;
+			}
+		}
+
+		entry->EhadOverEem = Ehad/Eem;
+	}
+}
+
+
+void TreeWriter::ProcessTaggingEfficiencyMuon(ExRootTreeBranch *branch, TObjArray *array)
+{
+	TIter iterator(array);
+	Candidate const* candidate = 0;
+	TaggingEfficiencyMuon* entry = 0;
+
+	while((candidate = static_cast<Candidate const*>(iterator.Next())))
+	{
+		entry = static_cast<TaggingEfficiencyMuon*>(branch->NewEntry());
+
+		entry->SetBit(kIsReferenced);
+		entry->SetUniqueID(candidate->GetUniqueID());
+
+		entry->PT = (candidate->Momentum).Pt();
+		entry->Eta = (candidate->Momentum).Eta();
+		entry->Phi = (candidate->Momentum).Phi();
+
+		entry->ImpactParameter = candidate->Dxy;
+		entry->Charge = candidate->Charge;
+
+		entry->xHardCore = candidate->Tau[0];
+		entry->xMinCore = candidate->Tau[1];
+		entry->xTrue = candidate->Tau[2];
+
+		// change in angle to matriarch when you add the muon a second time
+		// to estimate the nuetrino
+		entry->deltaTheta2MuHardCore = candidate->FracPt[0];
+		entry->deltaTheta2MuMinCore = candidate->FracPt[1];
+
+		entry->MotherID = candidate->BTag;
+		entry->MatriarchID = candidate->TauTag;
+	}
+}

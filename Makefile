@@ -847,6 +847,7 @@ tmp/modules/TreeWriter.$(ObjSuf): \
 	classes/DelphesClasses.h \
 	classes/DelphesFactory.h \
 	classes/DelphesFormula.h \
+	classes/KDPClasses.h \
 	external/ExRootAnalysis/ExRootResult.h \
 	external/ExRootAnalysis/ExRootFilter.h \
 	external/ExRootAnalysis/ExRootClassifier.h \
@@ -871,6 +872,7 @@ tmp/modules/Weighter.$(ObjSuf): \
 	external/ExRootAnalysis/ExRootClassifier.h
 DELPHES_OBJ +=  \
 	tmp/classes/DelphesClasses.$(ObjSuf) \
+	tmp/classes/KDPClasses.$(ObjSuf) \
 	tmp/classes/DelphesFactory.$(ObjSuf) \
 	tmp/classes/DelphesFormula.$(ObjSuf) \
 	tmp/classes/DelphesHepMCReader.$(ObjSuf) \
@@ -1385,7 +1387,7 @@ FASTJET_OBJ +=  \
 
 ifeq ($(HAS_PYTHIA8),true)
 FASTJET_OBJ +=  \
-	
+
 endif
 
 tmp/display/Delphes3DGeometry.$(ObjSuf): \
@@ -1429,7 +1431,7 @@ DISPLAY_OBJ +=  \
 
 ifeq ($(HAS_PYTHIA8),true)
 DISPLAY_OBJ +=  \
-	
+
 endif
 
 tmp/external/tcl/panic.$(ObjSuf): \
@@ -1581,23 +1583,23 @@ modules/IdentificationMap.h: \
 modules/ExampleModule.h: \
 	classes/DelphesModule.h
 	@touch $@
-	
+
 modules/HighPtBTagger.h: \
 	classes/DelphesModule.h
 	@touch $@
-	
+
 modules/LHCOWriterDirect.h: \
 	classes/DelphesModule.h
 	@touch $@
-	
+
 modules/PropagatorAndPixelTracker.h: \
 	classes/DelphesModule.h
 	@touch $@
-	
+
 modules/PixelPicture.h: \
 	classes/DelphesModule.h
 	@touch $@
-	
+
 modules/AllParticlePropagator.h: \
 	classes/DelphesModule.h
 	@touch $@

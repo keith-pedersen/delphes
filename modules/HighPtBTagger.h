@@ -73,9 +73,6 @@ class TObjArray;
 class TIterator;
 class Candidate;
 class TFile;
-class TH1I;
-class TH1F;
-class TH2F;
 
 namespace fastjet
 {
@@ -94,18 +91,14 @@ class HighPtBTagger: public DelphesModule
 		void Finish();
 
 	private:
-		void FillTH1F(const std::vector<std::vector<TH1F*> >& histoVec, const Int_t coreIndex, const Int_t flavor, const Double_t fillValue);
-		void FillTH2F(const std::vector<std::vector<TH2F*> >& histoVec, const Int_t coreIndex, const Int_t flavor, const Double_t fillValueX, const Double_t fillValueY);
-
-		void FillMotherPIDHisto(const Int_t PID);
-		void WriteMotherPIDHisto();
-
 		Int_t fBitNumber;
 		Double_t fMinJetPt;
 		Double_t fMinMuonPt;
 		Double_t fMinTowerPtRatio;
 		Double_t fCoreAntiktR;
-		Double_t fMinCorePtRatio;
+		Double_t fMinCoreMinBoost;
+		Double_t fMinCoreMinBoost2;
+		Double_t fCorePtRatioMin;
 		Double_t fCoreMassHypothesis;
 		Double_t fCoreMassHypothesis2;
 		Double_t fMinFinalMass;
@@ -119,49 +112,7 @@ class HighPtBTagger: public DelphesModule
 
 		fastjet::JetDefinition* fCoreDefinition;
 
-		TDirectory* histoDir;
-
-		std::map<Int_t, Int_t> pdgID;
-
-		TH1I
-			*pt_Jets,
-			*eta_Jets,
-			*pt_Muons,
-			*motherPID;
-
-		// To make histograms more versatile, we will create vectors of them
-
-		// These histograms are not core dependent
-		//     x_True[motherFlavor]
-		std::vector<TH1F*>
-			x_True,
-			pt_MuJets,
-			eta_MuJets;
-
-		// These histograms depend on core reconstruction, and the core's matriarch
-		//     histoVec[coreIndex][matriarchFlavor]
-		std::vector<std::vector<TH1F*> >
-			coreRatio,
-			mass;
-
-		// These histograms depend on core reconstruction, and the muons mother
-		//     histoVec[coreIndex][matriarchFlavor]
-		std::vector<std::vector<TH1F*> >
-			deltaMass,
-			x_Core,
-			deltaTrue,
-			deltaTrue2Mu,
-			pt_Tagged,
-			eta_Tagged;
-
-		std::vector<std::vector<TH2F*> >
-			x_Core__vs__x_True,
-			x_Core__vs__coreRatio;
-
-		// We'll need a map from flavor to histogram index
-		std::map<Int_t, Int_t> flavorToHistoIndex;
-
-		ClassDef(HighPtBTagger, 1)
+		ClassDef(HighPtBTagger, 2)
 };
 
 bool SortCandidatePt_Low2High(Candidate const* one, Candidate const* two);

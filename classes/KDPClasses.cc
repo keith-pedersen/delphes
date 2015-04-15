@@ -1,7 +1,8 @@
 #include "KDPClasses.h"
+#include "TLorentzVector.h"
 
-CompBase TaggingEfficiencyJet::fgCompare = CompPT<TaggingEfficiencyJet>::Instance();
-CompBase TaggingEfficiencyMuon::fgCompare = CompPT<TaggingEfficiencyMuon>::Instance();
+CompBase* TaggingEfficiencyJet::fgCompare = CompPT<TaggingEfficiencyJet>::Instance();
+CompBase* TaggingEfficiencyMuon::fgCompare = CompPT<TaggingEfficiencyMuon>::Instance();
 
 const Float_t TaggingEfficiencyMuon::Mass = 0.1056583715;
 

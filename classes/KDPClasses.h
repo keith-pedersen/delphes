@@ -4,6 +4,7 @@
 #define KDP_CLASSES
 
 #include "TObject.h"
+#include "classes/SortableObject.h"
 
 class TLorentzVector;
 class CompBase;
@@ -66,10 +67,12 @@ class TaggingEfficiencyJet : public SortableObject
 		Kinematic_t Mass; // jet invariant mass
 		Kinematic_t EhadOverEem; // ratio of the hadronic versus electromagnetic energy deposited in the calorimeter
 
-		Kinematic_t HardCoreRatio;
-		Kinematic_t MinCoreRatio;
+		Kinematic_t HardCoreRatio; // (Stored in Candidate::FracPt[0])
+		Kinematic_t MinCoreRatio;  // (Stored in Candidate::FracPt[1])
 
-		//Tag_t BTag; // 0 or 1 for a jet that has been tagged as containing a heavy quark
+		// Candidate::TauTag is used to indicate the presence of goodMuons
+
+		Tag_t BTag; // 0 or 1 for a jet that has been tagged as containing a heavy quark
 		//Tag_t MatriarchFlavor; // 0 or 1 for a jet that has been tagged as containing a heavy quark
 
 		TRefArray Muons; // references to muons
@@ -87,21 +90,28 @@ class TaggingEfficiencyMuon: public SortableObject
 	public:
 		typedef Float_t Kinematic_t;
 		typedef Char_t  Charge_t;
-		typedef UChar_t Tag_t;
+		typedef UInt_t ID_t;
 
 		Kinematic_t PT; // muon transverse momentum
 		Kinematic_t Eta; // muon pseudorapidity
 		Kinematic_t Phi; // muon azimuthal angle
 
+		Kinematic_t ImpactParameter; // radial distance of track close approach to beamline (signed by L_z)
+
 		// x to various objects
-		Kinematic_t xHardCore;
-		Kinematic_t xMinCore;
-		Kinematic_t xTrue;
+		Kinematic_t xHardCore; // (Stored in Candidate::Tau[0])
+		Kinematic_t xMinCore; //  (Stored in Candidate::Tau[1])
+		Kinematic_t xTrue; //     (Stored in Candidate::Tau[2])
+
+		// change in angle to matriarch when you add the muon a second time
+		// to estimate the nuetrino
+		Kinematic_t deltaTheta2MuHardCore; // (Stored in Candidate::FracPt[0])
+		Kinematic_t deltaTheta2MuMinCore; //  (Stored in Candidate::FracPt[1])
+
+		ID_t MotherID; // Mother is what emitted the muon (if tau, find tau's mother) (Stored in Candidate::BTag)
+		ID_t MatriarchID; // Matriarch is primary hadron                              (Stored in Candidate::TauTag)
 
 		Charge_t Charge; // muon charge
-
-		Tag_t MotherFlavor;
-		Tag_t MatriarchFlavor;
 
 		const static Float_t Mass;
 
