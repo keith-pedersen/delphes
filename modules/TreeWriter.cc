@@ -783,6 +783,11 @@ void TreeWriter::ProcessTaggingEfficiencyJet(ExRootTreeBranch *branch, TObjArray
 		TIter itConstituents(candidate->GetCandidates());
 		Candidate* constituent;
 
+		// The TClonesArray re-uses objects, MUST remember to clear the array before filling,
+		// otherwise the jets in the later events will be filled with a bunch of muons
+		// from earlier events. Learned this one the hard way (several hours down the drain)
+		(entry->Muons).Clear();
+
 		while((constituent = static_cast<Candidate*>(itConstituents.Next())))
 		//and goodMuonsFound < goodMuonsInJet)
 		{
