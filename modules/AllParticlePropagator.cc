@@ -667,15 +667,16 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 				sprintf(messageChar, "(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your helix math is all wrong!\nctBarrel = %.16e\n", ctBarrel);
 				message << messageChar;
 
-				sprintf(messageChar, "Helix radius: %.16e \nBeam distance: %.16e \nCylinder radius: %.16e \nOmegaOverC: %.16e \n",
-					R_hx, RBeam_hx, fRadius, omegaOverC);
+				sprintf(messageChar, "r0: %.16e \nHelix radius: %.16e \nBeam distance: %.16e \nCylinder radius: %.16e \nOmegaOverC: %.16e \n",
+					r0.Norm(), R_hx, RBeam_hx, fRadius, omegaOverC);
 				message << messageChar;
 
 				sprintf(messageChar, "cosEpsilon: %.16e \nsinEpsilon: %.16e\n", cosEpsilon, sinEpsilon);
 				message << messageChar;
 
 				sprintf(messageChar, "phi0: %.16e \nphiBarrel: %.16e\n", phi0, atan2(sinEpsilon, cosEpsilon));
-
+				message << messageChar;	
+						
 				throw runtime_error(message.str());
 			}
 
