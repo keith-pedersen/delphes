@@ -512,7 +512,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 	//
 	//     I * omega * z^ == r0>_helix x p>_T == r0>_helix x r0Beta> * (energy/c)
 	//
-	// Crossing in r0Beta> from the left, and rearranging terms (e.g. I = gamma*m*R_helix), we get:
+	// Crossing in r0Beta> from the left, and rearranging terms (e.g. I = gamma*m*R_helix**2), we get:
 	//
 	//     r0>_helix == (r0Beta> x z^) / (omega / c)
 	//
@@ -573,7 +573,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// the helix coordinate system.  Thus, the particle's initial angular position
 			// (phi0) can be found from r0>_hx and rBeam>_hx.
 			//
-			// The most accurate way to find the angle between two vectors is not:
+			// The most accurate way to find the angle between two vectors is NOT:
 			//     acos(a>.b>/sqrt(a>.a> * b>.b>))
 			// but (per W. Kahan):
 			//
@@ -591,7 +591,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// We'll still need to find the sign of phi0 (which doesn't depend
 			// on the charge ... some sketches may be required to understand why):
 			//
-			//    sign(deltaPhi) = sign(rBeam>_hx x r0>_hx)
+			//    sign(phi0) = sign(rBeam>_hx x r0>_hx)
 
 			const VecXY alpha = r0_hx * RBeam_hx;
 
@@ -602,7 +602,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// perigree, then phi = +/-0 (and the sign of zero shouldn't matter).
 			// If it's at apogee, then it's a looper, so phi_0 is only used for
 			// Zd (which now is a meaningless number, since the particle is at
-			// apogee, so close approach is equally in front and begind).
+			// apogee, so close approach is equally in front and behind).
 
 			// To find z at close approach, subtract the z-distance travelled
 			// since (or until) close approach.
@@ -644,10 +644,10 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		// Thus, to find epsilon, we can use atan2.
 		const Double_t denom = R_hx * RBeam_hx;
 		const Double_t sinEpsilon =
-			copysign(2 * KahanTriangleAreaPreSorted(smallToLargeTriangleSides[2], smallToLargeTriangleSides[1], smallToLargeTriangleSides[0]) / denom,
+			copysign(2. * KahanTriangleAreaPreSorted(smallToLargeTriangleSides[2], smallToLargeTriangleSides[1], smallToLargeTriangleSides[0]) / denom,
 				omegaOverC);
 		// Assume RBeam2_hx > R2_hx > fRadius2
-		const Double_t cosEpsilon = (RBeam2_hx + (R2_hx - fRadius2))/(2*denom);
+		const Double_t cosEpsilon = (RBeam2_hx + (R2_hx - fRadius2))/(2.*denom);
 
 		const Double_t ctBarrel = (atan2(sinEpsilon, cosEpsilon) - phi0) / omegaOverC;
 
@@ -662,9 +662,21 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 
 			if(ctBarrel < 0.)
 			{
-				char message[100];
-				sprintf(message, "(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your helix math is all wrong!\nctBarrel = %.16e\n", ctBarrel);
-				throw runtime_error(message);
+				stringstream message;
+				char messageChar[1024];
+				sprintf(messageChar, "(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your helix math is all wrong!\nctBarrel = %.16e\n", ctBarrel);
+				message << messageChar;
+
+				sprintf(messageChar, "Helix radius: %.16e \nBeam distance: %.16e \nCylinder radius: %.16e \nOmegaOverC: %.16e \n",
+					R_hx, RBeam_hx, fRadius, omegaOverC);
+				message << messageChar;
+
+				sprintf(messageChar, "cosEpsilon: %.16e \nsinEpsilon: %.16e\n", cosEpsilon, sinEpsilon);
+				message << messageChar;
+
+				sprintf(messageChar, "phi0: %.16e \nphiBarrel: %.16e\n", phi0, atan2(sinEpsilon, cosEpsilon));
+
+				throw runtime_error(message.str());
 			}
 
 			// Because we know the cos and sin of epsilon, we know where the exit vector is in hxPr
