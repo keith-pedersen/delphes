@@ -5,6 +5,8 @@
 #include <cmath>
 #include "AllParticlePropagator.h"
 
+#include <cstdio>
+
 const Double_t c_light = 299792458.; // [m/s]
 const Double_t PI = acos(-1.);
 const Double_t ABSURDLY_LARGE = pow(2., 71.);
@@ -22,7 +24,7 @@ const Double_t METERS_to_mm = 1E3;
 Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Double_t c)
 {
 	// EXTRA PARENTHESIS ARE DELIBERATE, DO NOT REMOVE
-	return sqrt((a + (b + c))*(c - (a - b))*(c + (a - b))*(a + (b - c)))/4;
+	return sqrt((a + (b + c))*(c - (a - b))*(c + (a - b))*(a + (b - c)))/4.;
 	// See "Mathematics Written in Sand" by W. Kahan, bottom of page 10
 	// http://www.cs.berkeley.edu/~wkahan/MathSand.pdf#page=10
 }
@@ -659,7 +661,11 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			ctProp = ctBarrel;
 
 			if(ctBarrel < 0.)
-				throw runtime_error("(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your helix math is all wrong!");
+			{
+				char message[100];
+				sprintf(message, "(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your helix math is all wrong!\nctBarrel = %.16e\n", ctBarrel);
+				throw runtime_error(message);
+			}
 
 			// Because we know the cos and sin of epsilon, we know where the exit vector is in hxPr
 			// Creating it in hxPr then rotating back to helix is much faster than using additional trig functions
