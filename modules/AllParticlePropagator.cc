@@ -248,14 +248,15 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 
 		if(cTau <= 0.) // The particle decayed instantaneously (or has an invalid cTau)
 		{
-			candidate->TrackLength = 0.; // This is also the "processed flag.
+			candidate->TrackLength = 0.; // This indicates that the particle has been "processed
 
 			const TLorentzVector& position = candidate->Position;
 			candidate->Area = position; // It didn't go anywhere, but give it a valid initial position
 
-			// Set CreationRadius, then check that the particle was created inside the cylinder (sanity check)
-			if(((candidate->CreationRadius = sqrt(position.X()*position.X() +  position.Y()*position.Y())) > fRadius)
-				or (abs(position.Z()) > fHalfLength))
+			const Double_t creationRadius = sqrt(position.X()*position.X() +  position.Y()*position.Y());
+
+			// Check that the particle was created inside the cylinder (sanity check)
+			if((creationRadius >= fRadius)	or (abs(position.Z()) >= fHalfLength))
 			{
 				stringstream message;
 				message << "(AllParticlePropagator::Propagate1): Particle created outside the cylinder ";
@@ -264,6 +265,8 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				throw runtime_error(message.str());
 				// For more information on this error, see #5 in the class description in the header file
 			}
+
+			candidate->CreationRadius = creationRadius;
 		}
 		else
 		{
@@ -284,15 +287,21 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				z0 = position.Z(),
 				q = candidate->Charge;
 
-			// Set CreationRadius, then check that the particle was created inside the cylinder
-			if(((candidate->CreationRadius = sqrt(R02)) > fRadius) or (abs(z0) > fHalfLength))
 			{
-				stringstream message;
-				message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
-				message << "( " << candidate->CreationRadius << " , " << position.Z() << " )!\n";
-				message << "Did you include the entire decay chain? Did you re-index?\n";
-				throw runtime_error(message.str());
-				// For more information on this error, see #5 in the class description in the header file
+				const Double_t creationRadius = sqrt(R02);
+
+				// Check that the particle was created inside the cylinder
+				if((creationRadius >= fRadius) or (abs(z0) >= fHalfLength))
+				{
+					stringstream message;
+					message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
+					message << "( " << candidate->CreationRadius << " , " << position.Z() << " )!\n";
+					message << "Did you include the entire decay chain? Did you re-index?\n";
+					throw runtime_error(message.str());
+					// For more information on this error, see #5 in the class description in the header file
+				}
+
+				candidate->CreationRadius = creationRadius;
 			}
 
 			// This maximum representable non-infinite gamma is gammaMax = 1/sqrt(MachineEpsilon).
@@ -311,7 +320,8 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			bool decays = true;
 
 			// The total lab propagation time; currently, that's the time until decay (cTau * gamma).
-			Double_t ctProp = cTau * (energy / candidate->Mass);
+			// Use the absolute value JUST IN CASE the mass (or CTau) is accidently -0.
+			Double_t ctProp = abs(cTau * (energy / candidate->Mass));
 			// For massless particles, this will be (inf). That's OK, because we will find the shortest time.
 
 			// The particle's final position; default to initial position.
@@ -402,7 +412,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 					ctProp = ctBarrel;
 
 					if(ctBarrel < 0.)
-						throw runtime_error("(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your straight-line math is all wrong!");
+						throw runtime_error("(AllParticlePropagator::Propagate): Keith, you fat fuck, your straight-line math is all wrong!");
 					decays = false;
 				}
 
@@ -413,6 +423,16 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			position.SetXYZT(rFinal.x, rFinal.y,
 				z0 + z0Beta * ctProp,
 				position.T() + ctProp);
+
+			// Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
+			if(decays and ((rFinal.Norm2() >= fRadius2) or (abs(position.Z()) >= fHalfLength)))
+			{
+				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
+				printf("rFinal: %.16e\n", rFinal.Norm());
+				printf("zFinal: %.16e\n", position.Z());
+				printf("omega:  %.16e\n", omegaOverC);
+				throw runtime_error("(AllParticleProagator::Propagate) Particle propagated to outside of cylinder!");
+			}
 
 			// Set the track length and use it to do a simple pre-sort of track candidates,
 			// so that the charged hardron output array doesn't get filled with a bunch of invisible tracks
@@ -675,8 +695,8 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 				message << messageChar;
 
 				sprintf(messageChar, "phi0: %.16e \nphiBarrel: %.16e\n", phi0, atan2(sinEpsilon, cosEpsilon));
-				message << messageChar;	
-						
+				message << messageChar;
+
 				throw runtime_error(message.str());
 			}
 
