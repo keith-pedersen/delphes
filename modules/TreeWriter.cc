@@ -754,6 +754,8 @@ void TreeWriter::Process()
 
 void TreeWriter::ProcessTaggingEfficiencyJet(ExRootTreeBranch *branch, TObjArray *array)
 {
+	array->Sort();
+
 	TIter iterator(array);
 	Candidate* candidate = 0;
 	TaggingEfficiencyJet* entry = 0;
@@ -814,6 +816,8 @@ void TreeWriter::ProcessTaggingEfficiencyJet(ExRootTreeBranch *branch, TObjArray
 
 void TreeWriter::ProcessTaggingEfficiencyMuon(ExRootTreeBranch *branch, TObjArray *array)
 {
+	array->Sort();
+	
 	TIter iterator(array);
 	Candidate const* candidate = 0;
 	TaggingEfficiencyMuon* entry = 0;
