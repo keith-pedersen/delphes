@@ -5,6 +5,8 @@
 #include <cmath>
 #include "AllParticlePropagator.h"
 
+#include <cstdio>
+
 const Double_t c_light = 299792458.; // [m/s]
 const Double_t PI = acos(-1.);
 const Double_t ABSURDLY_LARGE = pow(2., 71.);
@@ -22,7 +24,7 @@ const Double_t METERS_to_mm = 1E3;
 Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Double_t c)
 {
 	// EXTRA PARENTHESIS ARE DELIBERATE, DO NOT REMOVE
-	return sqrt((a + (b + c))*(c - (a - b))*(c + (a - b))*(a + (b - c)))/4;
+	return sqrt((a + (b + c))*(c - (a - b))*(c + (a - b))*(a + (b - c)))/4.;
 	// See "Mathematics Written in Sand" by W. Kahan, bottom of page 10
 	// http://www.cs.berkeley.edu/~wkahan/MathSand.pdf#page=10
 }
@@ -118,7 +120,8 @@ Candidate* AllParticlePropagator::Rotate(Candidate* const daughter, RotationXY c
 	if(daughter)
 	{
 		daughter->Position = mothersPosition; // The daughter's creation vertex is the mother's decay vertex
-		rotation->ForwardRotateDaughterMomentum(daughter); // Rotate the daughter's 4-momentum
+		if(rotation)
+			rotation->ForwardRotateDaughterMomentum(daughter); // Rotate the daughter's 4-momentum
 	}
 
 	return daughter;
@@ -246,22 +249,25 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 
 		if(cTau <= 0.) // The particle decayed instantaneously (or has an invalid cTau)
 		{
-			candidate->TrackLength = 0.; // This is also the "processed flag.
+			candidate->TrackLength = 0.; // This indicates that the particle has been "processed
 
 			const TLorentzVector& position = candidate->Position;
 			candidate->Area = position; // It didn't go anywhere, but give it a valid initial position
 
-			// Set CreationRadius, then check that the particle was created inside the cylinder (sanity check)
-			if(((candidate->CreationRadius = sqrt(position.X()*position.X() +  position.Y()*position.Y())) > fRadius)
-				or (abs(position.Z()) > fHalfLength))
+			const Double_t creationRadius = sqrt(position.X()*position.X() +  position.Y()*position.Y());
+
+			// Check that the particle was created inside the cylinder (sanity check)
+			if((creationRadius >= fRadius)	or (abs(position.Z()) >= fHalfLength))
 			{
 				stringstream message;
 				message << "(AllParticlePropagator::Propagate1): Particle created outside the cylinder ";
-				message << "( " << candidate->CreationRadius << " , " << position.Z() << " )!\n";
+				message << "( " << creationRadius << " , " << position.Z() << " )!\n";
 				message << "Did you include the entire decay chain? Did you re-index?\n";
 				throw runtime_error(message.str());
 				// For more information on this error, see #5 in the class description in the header file
 			}
+
+			candidate->CreationRadius = creationRadius;
 		}
 		else
 		{
@@ -282,15 +288,21 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				z0 = position.Z(),
 				q = candidate->Charge;
 
-			// Set CreationRadius, then check that the particle was created inside the cylinder
-			if(((candidate->CreationRadius = sqrt(R02)) > fRadius) or (abs(z0) > fHalfLength))
 			{
-				stringstream message;
-				message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
-				message << "( " << candidate->CreationRadius << " , " << position.Z() << " )!\n";
-				message << "Did you include the entire decay chain? Did you re-index?\n";
-				throw runtime_error(message.str());
-				// For more information on this error, see #5 in the class description in the header file
+				const Double_t creationRadius = sqrt(R02);
+
+				// Check that the particle was created inside the cylinder
+				if((creationRadius >= fRadius) or (abs(z0) >= fHalfLength))
+				{
+					stringstream message;
+					message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
+					message << "( " << creationRadius << " , " << z0 << " )!\n";
+					message << "Did you include the entire decay chain? Did you re-index?\n";
+					throw runtime_error(message.str());
+					// For more information on this error, see #5 in the class description in the header file
+				}
+
+				candidate->CreationRadius = creationRadius;
 			}
 
 			// This maximum representable non-infinite gamma is gammaMax = 1/sqrt(MachineEpsilon).
@@ -309,7 +321,8 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			bool decays = true;
 
 			// The total lab propagation time; currently, that's the time until decay (cTau * gamma).
-			Double_t ctProp = cTau * (energy / candidate->Mass);
+			// Use the absolute value JUST IN CASE the mass (or CTau) is accidently -0.
+			Double_t ctProp = abs(cTau * (energy / candidate->Mass));
 			// For massless particles, this will be (inf). That's OK, because we will find the shortest time.
 
 			// The particle's final position; default to initial position.
@@ -400,7 +413,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 					ctProp = ctBarrel;
 
 					if(ctBarrel < 0.)
-						throw runtime_error("(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your straight-line math is all wrong!");
+						throw runtime_error("(AllParticlePropagator::Propagate): Keith, you fat fuck, your straight-line math is all wrong!");
 					decays = false;
 				}
 
@@ -411,6 +424,20 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			position.SetXYZT(rFinal.x, rFinal.y,
 				z0 + z0Beta * ctProp,
 				position.T() + ctProp);
+
+			// Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
+			// In reality, we should just declare that this particle does not decay
+			// But, since I just found a different source of error in my code,
+			// let's just keep this here for now until I'm confident that
+			// we can safely make such a statement.
+			if(decays and ((rFinal.Norm() >= fRadius) or (abs(position.Z()) >= fHalfLength)))
+			{
+				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
+				printf("rFinal: %.16e\n", rFinal.Norm());
+				printf("zFinal: %.16e\n", position.Z());
+				printf("omega:  %.16e\n", omegaOverC);
+				throw runtime_error("(AllParticleProagator::Propagate) Particle propagated to outside of cylinder!");
+			}
 
 			// Set the track length and use it to do a simple pre-sort of track candidates,
 			// so that the charged hardron output array doesn't get filled with a bunch of invisible tracks
@@ -448,7 +475,19 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 		}//End propagation
 	}//End temporary variable scope
 
-	if(rotation) // If we have an active rotation, Propagate all daughters immedietely
+	//if(rotation) // If we have an active rotation, Propagate all daughters immedietely
+	// Previously, we would only propagate recursively when there was an active rotation.
+	// BUT, I started storing the pythia particles with binary32, while
+	// propagating from the primary vertex with binary64. This means that
+	// a totally nuetral decay lineage may no longer completely jive
+	// (i.e. the creation vertex of a particle who's pregenetors are all
+	// neutral is not neccessarily the same as their mother's decay position,
+	// due to the differing precision of the calculations). This becomes
+	// a problem near the edge of the cylinder (this problem
+	// was discovered in 1 decay out of 10 billion). Thus, decay all
+	// particles recursively when their final position is not at the primary vertex
+	// (i.e. they have been propagated). This filters out colored particles.
+	if(candidate->Position.Vect().Mag2() > 0.)
 	{
 		{
 			Int_t daughterIndex = candidate->D1;
@@ -510,7 +549,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 	//
 	//     I * omega * z^ == r0>_helix x p>_T == r0>_helix x r0Beta> * (energy/c)
 	//
-	// Crossing in r0Beta> from the left, and rearranging terms (e.g. I = gamma*m*R_helix), we get:
+	// Crossing in r0Beta> from the left, and rearranging terms (e.g. I = gamma*m*R_helix**2), we get:
 	//
 	//     r0>_helix == (r0Beta> x z^) / (omega / c)
 	//
@@ -571,7 +610,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// the helix coordinate system.  Thus, the particle's initial angular position
 			// (phi0) can be found from r0>_hx and rBeam>_hx.
 			//
-			// The most accurate way to find the angle between two vectors is not:
+			// The most accurate way to find the angle between two vectors is NOT:
 			//     acos(a>.b>/sqrt(a>.a> * b>.b>))
 			// but (per W. Kahan):
 			//
@@ -589,7 +628,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// We'll still need to find the sign of phi0 (which doesn't depend
 			// on the charge ... some sketches may be required to understand why):
 			//
-			//    sign(deltaPhi) = sign(rBeam>_hx x r0>_hx)
+			//    sign(phi0) = sign(rBeam>_hx x r0>_hx)
 
 			const VecXY alpha = r0_hx * RBeam_hx;
 
@@ -600,7 +639,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// perigree, then phi = +/-0 (and the sign of zero shouldn't matter).
 			// If it's at apogee, then it's a looper, so phi_0 is only used for
 			// Zd (which now is a meaningless number, since the particle is at
-			// apogee, so close approach is equally in front and begind).
+			// apogee, so close approach is equally in front and behind).
 
 			// To find z at close approach, subtract the z-distance travelled
 			// since (or until) close approach.
@@ -642,10 +681,10 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		// Thus, to find epsilon, we can use atan2.
 		const Double_t denom = R_hx * RBeam_hx;
 		const Double_t sinEpsilon =
-			copysign(2 * KahanTriangleAreaPreSorted(smallToLargeTriangleSides[2], smallToLargeTriangleSides[1], smallToLargeTriangleSides[0]) / denom,
+			copysign(2. * KahanTriangleAreaPreSorted(smallToLargeTriangleSides[2], smallToLargeTriangleSides[1], smallToLargeTriangleSides[0]) / denom,
 				omegaOverC);
 		// Assume RBeam2_hx > R2_hx > fRadius2
-		const Double_t cosEpsilon = (RBeam2_hx + (R2_hx - fRadius2))/(2*denom);
+		const Double_t cosEpsilon = (RBeam2_hx + (R2_hx - fRadius2))/(2.*denom);
 
 		const Double_t ctBarrel = (atan2(sinEpsilon, cosEpsilon) - phi0) / omegaOverC;
 
@@ -659,7 +698,24 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			ctProp = ctBarrel;
 
 			if(ctBarrel < 0.)
-				throw runtime_error("(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your helix math is all wrong!");
+			{
+				stringstream message;
+				char messageChar[1024];
+				sprintf(messageChar, "(AllParticlePropagator::PropagateHelicly): Keith, you fat fuck, your helix math is all wrong!\nctBarrel = %.16e\n", ctBarrel);
+				message << messageChar;
+
+				sprintf(messageChar, "r0: %.16e \nHelix radius: %.16e \nBeam distance: %.16e \nCylinder radius: %.16e \nOmegaOverC: %.16e \n",
+					r0.Norm(), R_hx, RBeam_hx, fRadius, omegaOverC);
+				message << messageChar;
+
+				sprintf(messageChar, "cosEpsilon: %.16e \nsinEpsilon: %.16e\n", cosEpsilon, sinEpsilon);
+				message << messageChar;
+
+				sprintf(messageChar, "phi0: %.16e \nphiBarrel: %.16e\n", phi0, atan2(sinEpsilon, cosEpsilon));
+				message << messageChar;
+
+				throw runtime_error(message.str());
+			}
 
 			// Because we know the cos and sin of epsilon, we know where the exit vector is in hxPr
 			// Creating it in hxPr then rotating back to helix is much faster than using additional trig functions
