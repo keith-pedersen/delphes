@@ -295,6 +295,24 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				// Check that the particle was created inside the cylinder
 				if((creationRadius >= fRadius) or (abs(z0) >= fHalfLength))
 				{
+					cout << "rotation: " << rotation << endl;
+					printf("r0: %.16e\n", creationRadius);
+                                        printf("r0 (no intermediate): %.16e\n", sqrt(position.X()*position.X() + position.Y()*position.Y()));
+					cout << "M1: " << candidate->M1 << endl;
+					cout << "M2: " << candidate->M2 << endl;
+					
+					Candidate* const mother = static_cast<Candidate*>(currentInputArray->At(candidate->M1));
+					cout << "Mother PID: " << mother->PID << endl;
+					printf("Mother CTau: %.16e\n" ,mother->CTau);
+					cout << "Mother status: " << mother->Status << endl;
+					
+					const TLorentzVector& motherP4 = mother->Momentum;
+					cout << "Mother pt: " << motherP4.Pt() << endl;
+
+					const TLorentzVector& motherPos4 = mother->Position;
+					
+					printf("M r0: %.16e\n", sqrt(motherPos4.X()*motherPos4.X() + motherPos4.Y()*motherPos4.Y()));
+
 					stringstream message;
 					message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
 					message << "( " << creationRadius << " , " << z0 << " )!\n";
@@ -427,7 +445,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				position.T() + ctProp);
 
 			// Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
-			if(decays and ((rFinal.Norm2() >= fRadius2) or (abs(position.Z()) >= fHalfLength)))
+			if(decays and ((rFinal.Norm() >= fRadius) or (abs(position.Z()) >= fHalfLength)))
 			{
 				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
 				printf("rFinal: %.16e\n", rFinal.Norm());
