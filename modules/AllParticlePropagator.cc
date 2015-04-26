@@ -485,7 +485,9 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 	// due to the differing precision of the calculations). This becomes
 	// a problem near the edge of the cylinder (this problem
 	// was discovered in 1 decay out of 10 billion). Thus, decay all
-	// particles recursively.
+	// particles recursively when their final position is not at the primary vertex
+	// (i.e. they have been propagated). This filters out colored particles.
+	if(candidate->Position.Vect().Mag2() > 0.)
 	{
 		{
 			Int_t daughterIndex = candidate->D1;
