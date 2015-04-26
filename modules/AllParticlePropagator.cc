@@ -258,6 +258,8 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			// Check that the particle was created inside the cylinder (sanity check)
 			if((creationRadius >= fRadius)	or (abs(position.Z()) >= fHalfLength))
 			{
+				printf("r0: %.16e\n", creationRadius);
+
 				stringstream message;
 				message << "(AllParticlePropagator::Propagate1): Particle created outside the cylinder ";
 				message << "( " << creationRadius << " , " << position.Z() << " )!\n";
