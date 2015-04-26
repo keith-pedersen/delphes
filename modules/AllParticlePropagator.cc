@@ -260,7 +260,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			{
 				stringstream message;
 				message << "(AllParticlePropagator::Propagate1): Particle created outside the cylinder ";
-				message << "( " << candidate->CreationRadius << " , " << position.Z() << " )!\n";
+				message << "( " << creationRadius << " , " << position.Z() << " )!\n";
 				message << "Did you include the entire decay chain? Did you re-index?\n";
 				throw runtime_error(message.str());
 				// For more information on this error, see #5 in the class description in the header file
@@ -295,7 +295,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				{
 					stringstream message;
 					message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
-					message << "( " << candidate->CreationRadius << " , " << position.Z() << " )!\n";
+					message << "( " << creationRadius << " , " << z0 << " )!\n";
 					message << "Did you include the entire decay chain? Did you re-index?\n";
 					throw runtime_error(message.str());
 					// For more information on this error, see #5 in the class description in the header file
