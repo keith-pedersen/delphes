@@ -120,7 +120,8 @@ Candidate* AllParticlePropagator::Rotate(Candidate* const daughter, RotationXY c
 	if(daughter)
 	{
 		daughter->Position = mothersPosition; // The daughter's creation vertex is the mother's decay vertex
-		rotation->ForwardRotateDaughterMomentum(daughter); // Rotate the daughter's 4-momentum
+		if(rotation)
+			rotation->ForwardRotateDaughterMomentum(daughter); // Rotate the daughter's 4-momentum
 	}
 
 	return daughter;
@@ -258,8 +259,6 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			// Check that the particle was created inside the cylinder (sanity check)
 			if((creationRadius >= fRadius)	or (abs(position.Z()) >= fHalfLength))
 			{
-				printf("r0: %.16e\n", creationRadius);
-
 				stringstream message;
 				message << "(AllParticlePropagator::Propagate1): Particle created outside the cylinder ";
 				message << "( " << creationRadius << " , " << position.Z() << " )!\n";
@@ -295,24 +294,6 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				// Check that the particle was created inside the cylinder
 				if((creationRadius >= fRadius) or (abs(z0) >= fHalfLength))
 				{
-					cout << "rotation: " << rotation << endl;
-					printf("r0: %.16e\n", creationRadius);
-                                        printf("r0 (no intermediate): %.16e\n", sqrt(position.X()*position.X() + position.Y()*position.Y()));
-					cout << "M1: " << candidate->M1 << endl;
-					cout << "M2: " << candidate->M2 << endl;
-					
-					Candidate* const mother = static_cast<Candidate*>(currentInputArray->At(candidate->M1));
-					cout << "Mother PID: " << mother->PID << endl;
-					printf("Mother CTau: %.16e\n" ,mother->CTau);
-					cout << "Mother status: " << mother->Status << endl;
-					
-					const TLorentzVector& motherP4 = mother->Momentum;
-					cout << "Mother pt: " << motherP4.Pt() << endl;
-
-					const TLorentzVector& motherPos4 = mother->Position;
-					
-					printf("M r0: %.16e\n", sqrt(motherPos4.X()*motherPos4.X() + motherPos4.Y()*motherPos4.Y()));
-
 					stringstream message;
 					message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
 					message << "( " << creationRadius << " , " << z0 << " )!\n";
@@ -445,6 +426,10 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				position.T() + ctProp);
 
 			// Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
+			// In reality, we should just declare that this particle does not decay
+			// But, since I just found a different source of error in my code,
+			// let's just keep this here for now until I'm confident that
+			// we can safely make such a statement.
 			if(decays and ((rFinal.Norm() >= fRadius) or (abs(position.Z()) >= fHalfLength)))
 			{
 				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
@@ -490,7 +475,17 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 		}//End propagation
 	}//End temporary variable scope
 
-	if(rotation) // If we have an active rotation, Propagate all daughters immedietely
+	//if(rotation) // If we have an active rotation, Propagate all daughters immedietely
+	// Previously, we would only propagate recursively when there was an active rotation.
+	// BUT, I started storing the pythia particles with binary32, while
+	// propagating from the primary vertex with binary64. This means that
+	// a totally nuetral decay lineage may no longer completely jive
+	// (i.e. the creation vertex of a particle who's pregenetors are all
+	// neutral is not neccessarily the same as their mother's decay position,
+	// due to the differing precision of the calculations). This becomes
+	// a problem near the edge of the cylinder (this problem
+	// was discovered in 1 decay out of 10 billion). Thus, decay all
+	// particles recursively.
 	{
 		{
 			Int_t daughterIndex = candidate->D1;
