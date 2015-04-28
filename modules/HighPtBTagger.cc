@@ -488,7 +488,7 @@ void HighPtBTagger::Process()
 							}
 						}
 
-						//const bool minCoreIsHardCore = (coreVec.size() == 1);
+						const bool minCoreIsHardCore = (coreVec.size() == 1);
 
 						// Iterate through the cores and analyze
 						for(unsigned int iCore = 0; iCore < coreP4Vec.size(); ++iCore)
@@ -521,6 +521,8 @@ void HighPtBTagger::Process()
 										core += muonP4;
 										// Store the change in angle
 										muon->FracPt[iCore] = AccurateAngle(matriarchP3, core.Vect()) - originalAngle;
+										if(minCoreIsHardCore)
+											muon->FracPt[1] = muon->FracPt[0];
 									}
 								}
 
@@ -533,6 +535,8 @@ void HighPtBTagger::Process()
 
 								muon->Tau[iCore] = xCore;
 								coreMinX[iCore] = std::min(coreMinX[iCore], xCore);
+								if(minCoreIsHardCore)
+									muon->Tau[1] = xCore;
 							}// End loop over muons
 						}// End loop over cores
 					}// End valid subjets
