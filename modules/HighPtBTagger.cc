@@ -115,34 +115,24 @@ void HighPtBTagger::Init()
 
 	fBitNumber = GetInt("BitNumber", 3);
 
-	fMinJetPt = GetDouble("MinJetPt", 1000.);
-	fMinMuonPt = GetDouble("MinMuonPt", 15.);
+	fMinJetPt = GetDouble("MinJetPt", 500.);
+	fMinMuonPt = GetDouble("MinMuonPt", 10.);
 
-	fMinTowerPtRatio = GetDouble("MinTowerPtRatio", .01);
-	fCoreAntiktR = GetDouble("CoreAntiktR", .1);
+	fMinTowerPtRatio = GetDouble("MinTowerPtRatio", .05);
+	fCoreAntiktR = GetDouble("CoreAntiktR", .04);
 	fCorePtRatioMin = GetDouble("CorePtRatioMin", .5);
 
-	fMinCoreMinBoost = GetDouble("MinCoreMinBoost", 5.);
+	fMinCoreMinBoost = GetDouble("MinCoreMinBoost", 1.);
 	fMinCoreMinBoost2 = Squared(fMinCoreMinBoost);
 
-	fCoreMassHypothesis = GetDouble("CoreMassHypothesis", 1.9);
+	fCoreMassHypothesis = GetDouble("CoreMassHypothesis", 2.0);
 	fCoreMassHypothesis2 = Squared(fCoreMassHypothesis);
 
 	fMinFinalMass = GetDouble("MinFinalMass", 5.3);
 	fMaxFinalMass = GetDouble("MaxFinalMass", fMinFinalMass*2);
 
-	{
-		const Double_t sigma = abs(GetDouble("PercentSolidAngle", .9));
-
-		if(sigma >= 1.)
-		{
-			throw runtime_error("HightPtBTagger. Supplied sigma is out of bounds (must be in [0,1) )");
-		}
-
-		fMaxEmissionInvariant = 1./tan(sqrt(1. - sigma));
-
-		cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Emission Invariant: " << fMaxEmissionInvariant << endl;
-	}
+	fMaxEmissionInvariant = GetDouble("MaxX", 3.);
+	cout << ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Emission Invariant: " << fMaxEmissionInvariant << endl;
 
 	fCoreDefinition = new fastjet::JetDefinition(fastjet::antikt_algorithm, fCoreAntiktR);
 
@@ -186,6 +176,8 @@ void HighPtBTagger::Process()
 		// Set used fields to NULL values
 		jet->FracPt[0] = -1.;
 		jet->FracPt[1] = -1.;
+		jet->Tau[0] = -1;
+		jet->Tau[1] = -1;
 		jet->TauTag = 0;
 
 		// At best, neutrino estimation can only double the pt of the jet,
@@ -475,7 +467,7 @@ void HighPtBTagger::Process()
 									if(muon.is_inside(*itCore))
 									{
 										*itCore -= muon;
-										break; // The muon can only be in one core at a time
+										break; // out of inner loop - the muon can only be in one core at a time
 									}
 								}
 							}
@@ -520,7 +512,7 @@ void HighPtBTagger::Process()
 									if(iCore == 0)
 										jet->Momentum += muonP4;
 
-									// Figure out if adding the muon twice is a good estimate of neutrino
+									// Figure out if adding the muon twice helps orient the subjet
 									{
 										const TVector3 matriarchP3 = (goodMuonsMatriarch[iMu]->Momentum).Vect();
 
@@ -551,24 +543,29 @@ void HighPtBTagger::Process()
 				// Re-check pt now that we've estimated neutrinos
 				if(jetPt > fMinJetPt)
 				{
-					bool minCoreIsHardCore = (coreP4Vec.size() == 1);
-
 					for(unsigned int iCore = 0; iCore < coreP4Vec.size(); ++iCore)
 					{
-						const Double_t coreRatio = coreP4Vec[iCore].Pt() / jetPt;
-
-						jet->FracPt[iCore] = coreRatio;
-
-						if(coreRatio >= fCorePtRatioMin)
-						{
-							if(coreMinX[iCore] <= fMaxEmissionInvariant)
-							{
-								// Only tag jets from the minCore
-								if(minCoreIsHardCore or iCore == 1)
-									jet->BTag |= (1 << fBitNumber);
-							}//End tagged
-						}//End core is hard enough
+						jet->FracPt[iCore] = coreP4Vec[iCore].Pt() / jetPt; // Store core ratio
+						jet->Tau[iCore] = coreMinX[iCore]; // Store core's smallest x
 					}//End loop through cores
+
+					// If the MinCore is the HardCore, copy its values
+					if (coreP4Vec.size() == 1)
+					{
+						jet->FracPt[1] = jet->FracPt[0];
+						jet->Tau[1] = jet->Tau[0];
+					}
+
+					// Tag based on the MinCore (make a flag maybe)
+					const unsigned int taggingCore = 1;
+
+					if(jet->FracPt[taggingCore] >= fCorePtRatioMin)
+					{
+						if(jet->Tau[taggingCore] <= fMaxEmissionInvariant)
+						{
+							jet->BTag |= (1 << fBitNumber);
+						}//End tagged
+					}//End core is hard enough
 				}
 			}//End muon pt cut
 		}//End jet initial pt cut

@@ -774,6 +774,9 @@ void TreeWriter::ProcessTaggingEfficiencyJet(ExRootTreeBranch *branch, TObjArray
 		entry->HardCoreRatio = candidate->FracPt[0];
 		entry->MinCoreRatio = candidate->FracPt[1];
 
+		entry->xMinHardCore = candidate->Tau[0];
+		entry->xMinMinCore = candidate->Tau[1];
+
 		entry->BTag = candidate->BTag;
 
 		//const UInt_t goodMuonsInJet = candidate->TauTag;
@@ -817,7 +820,7 @@ void TreeWriter::ProcessTaggingEfficiencyJet(ExRootTreeBranch *branch, TObjArray
 void TreeWriter::ProcessTaggingEfficiencyMuon(ExRootTreeBranch *branch, TObjArray *array)
 {
 	array->Sort();
-	
+
 	TIter iterator(array);
 	Candidate const* candidate = 0;
 	TaggingEfficiencyMuon* entry = 0;

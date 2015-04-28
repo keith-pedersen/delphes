@@ -70,9 +70,12 @@ class TaggingEfficiencyJet : public SortableObject
 		Kinematic_t HardCoreRatio; // (Stored in Candidate::FracPt[0])
 		Kinematic_t MinCoreRatio;  // (Stored in Candidate::FracPt[1])
 
+		Kinematic_t xMinHardCore; // The smallest x for a muon with the HardCore (Stored in Candidate::Tau[0])
+		Kinematic_t xMinMinCore;  // The smallest x for a muon with the MinCore (Stored in Candidate::Tau[1])
+
 		// Candidate::TauTag is used to indicate the presence of goodMuons
 
-		Tag_t BTag; // 0 or 1 for a jet that has been tagged as containing a heavy quark
+		Tag_t BTag; // >0 for a jet that has been tagged as containing a heavy quark
 		//Tag_t MatriarchFlavor; // 0 or 1 for a jet that has been tagged as containing a heavy quark
 
 		TRefArray Muons; // references to muons
@@ -82,7 +85,7 @@ class TaggingEfficiencyJet : public SortableObject
 
 		TLorentzVector P4() const;
 
-		ClassDef(TaggingEfficiencyJet, 1)
+		ClassDef(TaggingEfficiencyJet, 2)
 };
 
 class TaggingEfficiencyMuon: public SortableObject
