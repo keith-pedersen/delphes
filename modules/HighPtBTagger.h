@@ -101,6 +101,7 @@ class HighPtBTagger: public DelphesModule
 		Double_t fCorePtRatioMin;
 		Double_t fCoreMassHypothesis;
 		Double_t fCoreMassHypothesis2;
+		Double_t fSubjetMassHypothesis;
 		Double_t fMinFinalMass;
 		Double_t fMaxFinalMass;
 		Double_t fMaxEmissionInvariant;
