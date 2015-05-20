@@ -8,6 +8,14 @@
 
 class TLorentzVector;
 class CompBase;
+class ExRootTreeBranch;
+namespace Pythia8
+{
+	class Pythia;
+}
+class DelphesFactory;
+class TObjArray;
+class TClonesArray;
 
 // KDP
 // This class is designed to store information from a Pythia run
@@ -50,6 +58,12 @@ class PythiaParticle : public TObject
 
 		Kinematic_t Mass; // particle mass
 		Kinematic_t CTau; // The actual decay lifetime (in the rest frame)
+
+		static void WritePythiaToTree(Long64_t eventCounter, Pythia8::Pythia* const pythia,
+			ExRootTreeBranch* const eventInfoBranch, ExRootTreeBranch* const eventParticleBranch);
+		static void FillCandidatesFromPythiaTree(DelphesFactory* factory,
+			const Float_t unitWeight, ExRootTreeBranch* eventInfo, TObjArray* allParticleOutputArray,
+			TClonesArray* pythiaEventInfoArray, TClonesArray* pythiaEventRecordArray);
 
 		ClassDef(PythiaParticle, 1)
 };
