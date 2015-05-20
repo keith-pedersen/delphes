@@ -2,10 +2,46 @@
 #include "TLorentzVector.h"
 #include "DelphesClasses.h"
 #include "ExRootAnalysis/ExRootTreeBranch.h"
+#include "ExRootAnalysis/ExRootTreeWriter.h"
+#include "ExRootAnalysis/ExRootTreeReader.h"
 #include "Pythia8/Pythia.h"
 #include "DelphesFactory.h"
 #include "TObjArray.h"
 #include "TClonesArray.h"
+
+const char* const PythiaParticle::PYTHIA_TREE_NAME = "Pythia8";
+const char* const PythiaParticle::PYTHIA_EVENT_INFO_BRANCH_NAME = "EventInfo";
+const char* const PythiaParticle::PYTHIA_EVENT_RECORD_BRANCH_NAME = "EventRecord";
+
+ExRootTreeWriter* PythiaParticle::CreatePythiaOutputTree(TFile* const pythiaTreeFile)
+{
+	return new ExRootTreeWriter(pythiaTreeFile, PYTHIA_TREE_NAME);
+}
+
+ExRootTreeBranch* PythiaParticle::CreateInfoBranch(ExRootTreeWriter* pythiaWriter)
+{
+	return pythiaWriter->NewBranch(PYTHIA_EVENT_INFO_BRANCH_NAME, HepMCEvent::Class());
+}
+
+ExRootTreeBranch* PythiaParticle::CreateEventBranch(ExRootTreeWriter* pythiaWriter)
+{
+	return pythiaWriter->NewBranch(PYTHIA_EVENT_RECORD_BRANCH_NAME, PythiaParticle::Class());
+}
+
+ExRootTreeReader* PythiaParticle::LoadPythiaInputTree(TFile* const pythiaTreeFile)
+{
+	return new ExRootTreeReader(static_cast<TTree*>(pythiaTreeFile->Get(PYTHIA_TREE_NAME)));
+}
+
+TClonesArray* PythiaParticle::GetInfoBranch(ExRootTreeReader* pythiaReader)
+{
+	return pythiaReader->UseBranch(PYTHIA_EVENT_INFO_BRANCH_NAME);
+}
+
+TClonesArray* PythiaParticle::GetEventBranch(ExRootTreeReader* pythiaReader)
+{
+	return pythiaReader->UseBranch(PYTHIA_EVENT_RECORD_BRANCH_NAME);
+}
 
 // This routine fills from the Pythia event record to the output tree
 void PythiaParticle::WritePythiaToTree(Long64_t eventCounter, Pythia8::Pythia* const pythia,

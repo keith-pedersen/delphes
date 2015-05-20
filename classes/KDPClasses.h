@@ -9,6 +9,8 @@
 class TLorentzVector;
 class CompBase;
 class ExRootTreeBranch;
+class ExRootTreeWriter;
+class ExRootTreeReader;
 namespace Pythia8
 {
 	class Pythia;
@@ -58,6 +60,19 @@ class PythiaParticle : public TObject
 
 		Kinematic_t Mass; // particle mass
 		Kinematic_t CTau; // The actual decay lifetime (in the rest frame)
+
+
+		static const char* const PYTHIA_TREE_NAME;
+		static const char* const PYTHIA_EVENT_INFO_BRANCH_NAME;
+		static const char* const PYTHIA_EVENT_RECORD_BRANCH_NAME;
+
+		static ExRootTreeWriter* CreatePythiaOutputTree(TFile* const pythiaTreeFile);
+		static ExRootTreeBranch* CreateInfoBranch(ExRootTreeWriter* pythiaWriter);
+		static ExRootTreeBranch* CreateEventBranch(ExRootTreeWriter* pythiaWriter);
+
+		static ExRootTreeReader* LoadPythiaInputTree(TFile* const pythiaTreeFile);
+		static TClonesArray* GetInfoBranch(ExRootTreeReader* pythiaReader);
+		static TClonesArray* GetEventBranch(ExRootTreeReader* pythiaReader);
 
 		static void WritePythiaToTree(Long64_t eventCounter, Pythia8::Pythia* const pythia,
 			ExRootTreeBranch* const eventInfoBranch, ExRootTreeBranch* const eventParticleBranch);
