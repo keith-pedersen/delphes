@@ -128,6 +128,8 @@ void HighPtBTagger::Init()
 	fCoreMassHypothesis = GetDouble("CoreMassHypothesis", 2.0);
 	fCoreMassHypothesis2 = Squared(fCoreMassHypothesis);
 
+	fSubjetMassHypothesis = GetDouble("SubjetMassHypothesis", 5.3);	
+
 	fMinFinalMass = GetDouble("MinFinalMass", 5.3);
 	fMaxFinalMass = GetDouble("MaxFinalMass", fMinFinalMass*2);
 
@@ -409,7 +411,7 @@ void HighPtBTagger::Process()
 							bool hardestMuonUnsubtracted = true;
 
 							// By minimizing the squared mass, we'll minimize the mass
-							Double_t minMass2 = 9e9;
+							Double_t minDeltaMass = 9e9;
 							unsigned int minCoreIndex = 0;
 
 							for(unsigned int iSub = 0; iSub < subJets.size(); ++iSub)
@@ -431,16 +433,12 @@ void HighPtBTagger::Process()
 
 								const Double_t y = Tan2(subjet, hardestMuon);
 
-								// Technically, every squared mass has CoreMassHypothesis**2 (and is multiplied by 4),
-								// so there is no point in doing these to everything
-								// const Double_t mass2 = fCoreMassHypothesis2 + 4. * hardestMuon.E() * subjet.E() * (g + y) / (1. + (y + sqrt(1. - ((g - y) + g*y))));
-
-								//WARNING: Currently this implementation does not account for cores with two muons of almost equal energy (small percentage of cores)
-								const Double_t mass2 = hardestMuon.E() * subjet.E() * (g + y) / (1. + (y + sqrt(1. - ((g - y) + g*y))));
-
-								if(mass2 < minMass2)
+								// Instead of the minCore, find the core with mass closest to target
+								const Double_t deltaMass = abs(sqrt(fCoreMassHypothesis2 + 4. * hardestMuon.E() * subjet.E() * (g + y) / (1. + (y + sqrt(1. - ((g - y) + g*y))))) - fSubjetMassHypothesis);
+								
+								if(deltaMass < minDeltaMass)
 								{
-									minMass2 = mass2;
+									minDeltaMass = deltaMass;
 									minCoreIndex = iSub;
 								}
 							}
