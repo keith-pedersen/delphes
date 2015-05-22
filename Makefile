@@ -871,6 +871,7 @@ tmp/modules/Weighter.$(ObjSuf): \
 	external/ExRootAnalysis/ExRootClassifier.h
 DELPHES_OBJ +=  \
 	tmp/classes/DelphesClasses.$(ObjSuf) \
+	tmp/classes/KDPClasses.$(ObjSuf) \
 	tmp/classes/DelphesFactory.$(ObjSuf) \
 	tmp/classes/DelphesFormula.$(ObjSuf) \
 	tmp/classes/DelphesHepMCReader.$(ObjSuf) \

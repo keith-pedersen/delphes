@@ -18,6 +18,7 @@ namespace Pythia8
 class DelphesFactory;
 class TObjArray;
 class TClonesArray;
+class Candidate;
 
 // KDP
 // This class is designed to store information from a Pythia run
@@ -61,7 +62,6 @@ class PythiaParticle : public TObject
 		Kinematic_t Mass; // particle mass
 		Kinematic_t CTau; // The actual decay lifetime (in the rest frame)
 
-
 		static const char* const PYTHIA_TREE_NAME;
 		static const char* const PYTHIA_EVENT_INFO_BRANCH_NAME;
 		static const char* const PYTHIA_EVENT_RECORD_BRANCH_NAME;
@@ -74,14 +74,24 @@ class PythiaParticle : public TObject
 		static TClonesArray* GetInfoBranch(ExRootTreeReader* pythiaReader);
 		static TClonesArray* GetEventBranch(ExRootTreeReader* pythiaReader);
 
-		static void WritePythiaToTree(Long64_t eventCounter, Pythia8::Pythia* const pythia,
-			ExRootTreeBranch* const eventInfoBranch, ExRootTreeBranch* const eventParticleBranch);
-		static void FillCandidatesFromPythiaTree(DelphesFactory* factory,
-			const Float_t unitWeight, ExRootTreeBranch* eventInfo, TObjArray* allParticleOutputArray,
-			TClonesArray* pythiaEventInfoArray, TClonesArray* pythiaEventRecordArray);
+		void WritePythiaToTree(const Long64_t eventCounter, Pythia8::Pythia const* const pythia,
+			ExRootTreeBranch* const eventInfoBranch = 0, ExRootTreeBranch* const eventParticleBranch = 0, const Bool_t isPU = kFALSE);
 
-		ClassDef(PythiaParticle, 1)
+		void FillDelphesFactoryCandidatesFromPythiaTree(DelphesFactory* const factory,
+			TObjArray* const allParticleOutputArray, TClonesArray const* const pythiaEventRecordArray,
+			ExRootTreeBranch* const eventInfo = 0, TClonesArray const* const pythiaEventInfoArray = 0, const Float_t unitWeight = 0.);
+
+		void FillExternalCandidatesFromPythiaTree(ExRootTreeBranch* const newCandidateBranch,
+			TObjArray* const allParticleOutputArray, TClonesArray const* const pythiaEventRecordArray,
+			ExRootTreeBranch* const eventInfo = 0, TClonesArray const* const pythiaEventInfoArray = 0, const Float_t unitWeight = 0.);
+
+		static void FillInfo(ExRootTreeBranch* const eventInfo, TClonesArray const* const pythiaEventInfoArray, const Float_t unitWeight);
+		static void FillCandidate(Candidate* const candidate, PythiaParticle const* const pythiaParticle);
+
+		ClassDef(PythiaParticle, 2)
 };
+
+//------------------------------------------------------------------------------
 
 class TaggingEfficiencyJet : public SortableObject
 {
@@ -116,6 +126,8 @@ class TaggingEfficiencyJet : public SortableObject
 
 		ClassDef(TaggingEfficiencyJet, 2)
 };
+
+
 
 class TaggingEfficiencyMuon: public SortableObject
 {
