@@ -4,9 +4,20 @@
 #define KDP_CLASSES
 
 #include "TObject.h"
+#include "classes/SortableObject.h"
 
 class TLorentzVector;
 class CompBase;
+class ExRootTreeBranch;
+class ExRootTreeWriter;
+class ExRootTreeReader;
+namespace Pythia8
+{
+	class Pythia;
+}
+class DelphesFactory;
+class TObjArray;
+class TClonesArray;
 
 // KDP
 // This class is designed to store information from a Pythia run
@@ -50,6 +61,25 @@ class PythiaParticle : public TObject
 		Kinematic_t Mass; // particle mass
 		Kinematic_t CTau; // The actual decay lifetime (in the rest frame)
 
+
+		static const char* const PYTHIA_TREE_NAME;
+		static const char* const PYTHIA_EVENT_INFO_BRANCH_NAME;
+		static const char* const PYTHIA_EVENT_RECORD_BRANCH_NAME;
+
+		static ExRootTreeWriter* CreatePythiaOutputTree(TFile* const pythiaTreeFile);
+		static ExRootTreeBranch* CreateInfoBranch(ExRootTreeWriter* pythiaWriter);
+		static ExRootTreeBranch* CreateEventBranch(ExRootTreeWriter* pythiaWriter);
+
+		static ExRootTreeReader* LoadPythiaInputTree(TFile* const pythiaTreeFile);
+		static TClonesArray* GetInfoBranch(ExRootTreeReader* pythiaReader);
+		static TClonesArray* GetEventBranch(ExRootTreeReader* pythiaReader);
+
+		static void WritePythiaToTree(Long64_t eventCounter, Pythia8::Pythia* const pythia,
+			ExRootTreeBranch* const eventInfoBranch, ExRootTreeBranch* const eventParticleBranch);
+		static void FillCandidatesFromPythiaTree(DelphesFactory* factory,
+			const Float_t unitWeight, ExRootTreeBranch* eventInfo, TObjArray* allParticleOutputArray,
+			TClonesArray* pythiaEventInfoArray, TClonesArray* pythiaEventRecordArray);
+
 		ClassDef(PythiaParticle, 1)
 };
 
@@ -66,10 +96,15 @@ class TaggingEfficiencyJet : public SortableObject
 		Kinematic_t Mass; // jet invariant mass
 		Kinematic_t EhadOverEem; // ratio of the hadronic versus electromagnetic energy deposited in the calorimeter
 
-		Kinematic_t HardCoreRatio;
-		Kinematic_t MinCoreRatio;
+		Kinematic_t HardCoreRatio; // (Stored in Candidate::FracPt[0])
+		Kinematic_t MinCoreRatio;  // (Stored in Candidate::FracPt[1])
 
-		//Tag_t BTag; // 0 or 1 for a jet that has been tagged as containing a heavy quark
+		Kinematic_t xMinHardCore; // The smallest x for a muon with the HardCore (Stored in Candidate::Tau[0])
+		Kinematic_t xMinMinCore;  // The smallest x for a muon with the MinCore (Stored in Candidate::Tau[1])
+
+		// Candidate::TauTag is used to indicate the presence of goodMuons
+
+		Tag_t BTag; // >0 for a jet that has been tagged as containing a heavy quark
 		//Tag_t MatriarchFlavor; // 0 or 1 for a jet that has been tagged as containing a heavy quark
 
 		TRefArray Muons; // references to muons
@@ -79,7 +114,7 @@ class TaggingEfficiencyJet : public SortableObject
 
 		TLorentzVector P4() const;
 
-		ClassDef(TaggingEfficiencyJet, 1)
+		ClassDef(TaggingEfficiencyJet, 2)
 };
 
 class TaggingEfficiencyMuon: public SortableObject
@@ -87,21 +122,28 @@ class TaggingEfficiencyMuon: public SortableObject
 	public:
 		typedef Float_t Kinematic_t;
 		typedef Char_t  Charge_t;
-		typedef UChar_t Tag_t;
+		typedef UInt_t ID_t;
 
 		Kinematic_t PT; // muon transverse momentum
 		Kinematic_t Eta; // muon pseudorapidity
 		Kinematic_t Phi; // muon azimuthal angle
 
+		Kinematic_t ImpactParameter; // radial distance of track close approach to beamline (signed by L_z)
+
 		// x to various objects
-		Kinematic_t xHardCore;
-		Kinematic_t xMinCore;
-		Kinematic_t xTrue;
+		Kinematic_t xHardCore; // (Stored in Candidate::Tau[0])
+		Kinematic_t xMinCore; //  (Stored in Candidate::Tau[1])
+		Kinematic_t xTrue; //     (Stored in Candidate::Tau[2])
+
+		// change in angle to matriarch when you add the muon a second time
+		// to estimate the nuetrino
+		Kinematic_t deltaTheta2MuHardCore; // (Stored in Candidate::FracPt[0])
+		Kinematic_t deltaTheta2MuMinCore; //  (Stored in Candidate::FracPt[1])
+
+		ID_t MotherID; // Mother is what emitted the muon (if tau, find tau's mother) (Stored in Candidate::BTag)
+		ID_t MatriarchID; // Matriarch is primary hadron                              (Stored in Candidate::TauTag)
 
 		Charge_t Charge; // muon charge
-
-		Tag_t MotherFlavor;
-		Tag_t MatriarchFlavor;
 
 		const static Float_t Mass;
 
