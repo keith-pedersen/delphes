@@ -11,11 +11,11 @@
 
 const char* const PythiaParticle::PYTHIA_TREE_NAME = "Pythia8";
 const char* const PythiaParticle::PYTHIA_EVENT_INFO_BRANCH_NAME = "EventInfo";
-const char* const PythiaParticle::PYTHIA_EVENT_RECORD_BRANCH_NAME = "EventRecord";
+const char* const PythiaParticle::PYTHIA_EVENT_PARTICLE_BRANCH_NAME = "EventRecord";
 
 //------------------------------------------------------------------------------
 
-ExRootTreeWriter* PythiaParticle::CreatePythiaOutputTree(TFile* const pythiaTreeFile)
+ExRootTreeWriter* PythiaParticle::NewPythiaWriter(TFile* const pythiaTreeFile)
 {
 	return new ExRootTreeWriter(pythiaTreeFile, PYTHIA_TREE_NAME);
 }
@@ -24,103 +24,132 @@ ExRootTreeWriter* PythiaParticle::CreatePythiaOutputTree(TFile* const pythiaTree
 
 ExRootTreeBranch* PythiaParticle::CreateInfoBranch(ExRootTreeWriter* pythiaWriter)
 {
-	return pythiaWriter->NewBranch(PYTHIA_EVENT_INFO_BRANCH_NAME, HepMCEvent::Class());
+	if(pythiaWriter)
+		return pythiaWriter->NewBranch(PYTHIA_EVENT_INFO_BRANCH_NAME, HepMCEvent::Class());
+	else return 0;
 }
 
 //------------------------------------------------------------------------------
 
-ExRootTreeBranch* PythiaParticle::CreateEventBranch(ExRootTreeWriter* pythiaWriter)
+ExRootTreeBranch* PythiaParticle::CreateParticleBranch(ExRootTreeWriter* pythiaWriter)
 {
-	return pythiaWriter->NewBranch(PYTHIA_EVENT_RECORD_BRANCH_NAME, PythiaParticle::Class());
+	if(pythiaWriter)
+		return pythiaWriter->NewBranch(PYTHIA_EVENT_PARTICLE_BRANCH_NAME, PythiaParticle::Class());
+	else return 0;
 }
 
 //------------------------------------------------------------------------------
 
-ExRootTreeReader* PythiaParticle::LoadPythiaInputTree(TFile* const pythiaTreeFile)
+ExRootTreeReader* PythiaParticle::NewPythiaReader(TFile* const pythiaTreeFile)
 {
-	return new ExRootTreeReader(static_cast<TTree*>(pythiaTreeFile->Get(PYTHIA_TREE_NAME)));
+	if(pythiaTreeFile)
+		return new ExRootTreeReader(static_cast<TTree*>(pythiaTreeFile->Get(PYTHIA_TREE_NAME)));
+	else return 0;
 }
 
 //------------------------------------------------------------------------------
 
 TClonesArray* PythiaParticle::GetInfoBranch(ExRootTreeReader* pythiaReader)
 {
-	return pythiaReader->UseBranch(PYTHIA_EVENT_INFO_BRANCH_NAME);
+	if(pythiaReader)
+		return pythiaReader->UseBranch(PYTHIA_EVENT_INFO_BRANCH_NAME);
+	else return 0;
 }
 
 //------------------------------------------------------------------------------
 
-TClonesArray* PythiaParticle::GetEventBranch(ExRootTreeReader* pythiaReader)
+TClonesArray* PythiaParticle::GetParticleBranch(ExRootTreeReader* pythiaReader)
 {
-	return pythiaReader->UseBranch(PYTHIA_EVENT_RECORD_BRANCH_NAME);
+	if(pythiaReader)
+		return pythiaReader->UseBranch(PYTHIA_EVENT_PARTICLE_BRANCH_NAME);
+	else return 0;
 }
 
 //------------------------------------------------------------------------------
 
 // This routine fills from the Pythia event record to the output tree
-void PythiaParticle::WritePythiaToTree(const Long64_t eventCounter, Pythia8::Pythia const* const pythia,
-	ExRootTreeBranch* const eventInfoBranch, ExRootTreeBranch* const eventParticleBranch, const Bool_t isPU)
+void PythiaParticle::WritePythia(const Long64_t eventCounter, Pythia8::Pythia* const pythia,
+	ExRootTreeBranch* const eventParticleBranch, ExRootTreeBranch* const eventInfoBranch, const Bool_t isPU)
 {
-	HepMCEvent *event = static_cast<HepMCEvent *>(eventInfoBranch->NewEntry());
+	WriteInfo(eventCounter, pythia, eventInfoBranch);
 
-	event->Number = eventCounter;
-
-	event->ProcessID = pythia->info.code();
-	event->MPI = 1; //multi-particle interactions are on?
-	event->Weight = pythia->info.weight();
-	event->Scale = pythia->info.QRen();
-	event->AlphaQED = pythia->info.alphaEM();
-	event->AlphaQCD = pythia->info.alphaS();
-
-	event->ID1 = pythia->info.id1();
-	event->ID2 = pythia->info.id2();
-	event->X1 = pythia->info.x1();
-	event->X2 = pythia->info.x2();
-	event->ScalePDF = pythia->info.QFac();
-	event->PDF1 = pythia->info.pdf1();
-	event->PDF2 = pythia->info.pdf2();
-
-	// WARNING: Currently no stopwatch support
-	event->ReadTime = 0.;
-	event->ProcTime = 0.;
-
-	// Run through the Pythia event record, including the system line
-	// This makes sure that 0 is a completely invalid mother/daughter
-	for(int i = 0; i < pythia->event.size(); ++i)
+	if(eventParticleBranch)
 	{
-		const Pythia8::Particle &particleIn = pythia->event[i];
-		PythiaParticle* const particleOut = static_cast<PythiaParticle*>(eventParticleBranch->NewEntry());
-
-		particleOut->PID = particleIn.id();
-		particleOut->PythiaStatus = particleIn.status();
-		particleOut->IsPU = isPU;
-		particleOut->Charge = particleIn.charge();
-
-		particleOut->M1 = particleIn.mother1();
-		particleOut->M2 = particleIn.mother2();
-
-		particleOut->D1 = particleIn.daughter1();
-		particleOut->D2 = particleIn.daughter2();
-
-		particleOut->E  = particleIn.e();
-		particleOut->Px = particleIn.px();
-		particleOut->Py = particleIn.py();
-		particleOut->Pz = particleIn.pz();
-
-		particleOut->T = particleIn.tProd();
-		particleOut->X = particleIn.xProd();
-		particleOut->Y = particleIn.yProd();
-		particleOut->Z = particleIn.zProd();
-
-		particleOut->Mass = particleIn.m();
-		particleOut->CTau = particleIn.tau();
+		// Run through the Pythia event record, including the system line (index = 0)
+		// This makes sure that 0 is a valid, but nonsensical, mother/daughter
+		for(int i = 0; i < pythia->event.size(); ++i)
+		{
+			static_cast<PythiaParticle*>(eventParticleBranch->NewEntry())->Initialize(pythia->event[i], isPU);
+		}
 	}
 }
 
 //------------------------------------------------------------------------------
 
+void PythiaParticle::WriteInfo(const Long64_t eventCounter,
+	Pythia8::Pythia* const pythia, ExRootTreeBranch* const eventInfoBranch)
+{
+	if(eventInfoBranch)
+	{
+		HepMCEvent *event = static_cast<HepMCEvent *>(eventInfoBranch->NewEntry());
+
+		event->Number = eventCounter;
+
+		event->ProcessID = pythia->info.code();
+		event->MPI = pythia->flag("PartonLevel:MPI"); // For some stupid reason, this function (Pythia::flag) is not const. This is the only reason we can't use a (Pythia const* const ) throughout
+		event->Weight = pythia->info.weight();
+		event->Scale = pythia->info.QRen();
+		event->AlphaQED = pythia->info.alphaEM();
+		event->AlphaQCD = pythia->info.alphaS();
+
+		event->ID1 = pythia->info.id1();
+		event->ID2 = pythia->info.id2();
+		event->X1 = pythia->info.x1();
+		event->X2 = pythia->info.x2();
+		event->ScalePDF = pythia->info.QFac();
+		event->PDF1 = pythia->info.pdf1();
+		event->PDF2 = pythia->info.pdf2();
+
+		// WARNING: Currently no stopwatch support
+		event->ReadTime = 0.;
+		event->ProcTime = 0.;
+	}
+}
+
+//------------------------------------------------------------------------------
+
+void PythiaParticle::Initialize(const Pythia8::Particle& original, const Bool_t isPU)
+{
+	PID = original.id();
+	PythiaStatus = original.status();
+	IsPU = isPU;
+	Charge = original.charge();
+
+	M1 = original.mother1();
+	M2 = original.mother2();
+
+	D1 = original.daughter1();
+	D2 = original.daughter2();
+
+	E  = original.e();
+	Px = original.px();
+	Py = original.py();
+	Pz = original.pz();
+
+	T = original.tProd();
+	X = original.xProd();
+	Y = original.yProd();
+	Z = original.zProd();
+
+	Mass = original.m();
+	CTau = original.tau();
+}
+
+//------------------------------------------------------------------------------
+
+/*
 // This routine fills from the Pythia event record to the output tree
-void PythiaParticle::FillDelphesFactoryCandidatesFromPythiaTree(DelphesFactory* const factory,
+void PythiaParticle::FillDelphesFactoryFromPythiaTree(DelphesFactory* const factory,
 	TObjArray* const allParticleOutputArray, TClonesArray const* const pythiaEventRecordArray,
 	ExRootTreeBranch* const eventInfo, TClonesArray const* const pythiaEventInfoArray, const Float_t unitWeight)
 {
@@ -139,33 +168,11 @@ void PythiaParticle::FillDelphesFactoryCandidatesFromPythiaTree(DelphesFactory* 
 
 	delete itEventRecord;
 }
+*/
 
 //------------------------------------------------------------------------------
 
-// This routine fills from the Pythia event record to the output tree
-void PythiaParticle::FillExternalCandidatesFromPythiaTree(ExRootTreeBranch* const newCandidateBranch,
-	TObjArray* const allParticleOutputArray, TClonesArray const* const pythiaEventRecordArray,
-	ExRootTreeBranch* const eventInfo, TClonesArray const* const pythiaEventInfoArray, const Float_t unitWeight)
-{
-	PythiaParticle::FillInfo(eventInfo, pythiaEventInfoArray, unitWeight);
-
-	PythiaParticle const* pythiaParticle;
-	TIterator* itEventRecord = pythiaEventRecordArray->MakeIterator();
-
-	while((pythiaParticle = static_cast<PythiaParticle*>(itEventRecord->Next())))
-	{
-		Candidate* const candidate = static_cast<Candidate*>(newCandidateBranch->NewEntry());
-		allParticleOutputArray->Add(candidate);
-
-		PythiaParticle::FillCandidate(candidate, pythiaParticle);
-	}
-
-	delete itEventRecord;
-}
-
-//------------------------------------------------------------------------------
-
-void PythiaParticle::FillInfo(ExRootTreeBranch* const eventInfo, TClonesArray const* const pythiaEventInfoArray, const Float_t unitWeight)
+void PythiaParticle::CopyInfo(ExRootTreeBranch* const eventInfo, TClonesArray const* const pythiaEventInfoArray, const Float_t unitWeight)
 {
 	if(eventInfo && pythiaEventInfoArray)
 	{
@@ -181,24 +188,24 @@ void PythiaParticle::FillInfo(ExRootTreeBranch* const eventInfo, TClonesArray co
 
 //------------------------------------------------------------------------------
 
-void PythiaParticle::FillCandidate(Candidate* const candidate, PythiaParticle const* const pythiaParticle)
+void PythiaParticle::FillCandidate(Candidate* const candidate, const Int_t indexShift) const
 {
-	candidate->PID = pythiaParticle->PID;
-	candidate->Status = (pythiaParticle->PythiaStatus > 0) ? 1 : ((pythiaParticle->PythiaStatus < 0) ? 2 : 0); // WARNING: Assume the PythiaStatus != 0
-	candidate->IsPU = (pythiaParticle->IsPU == kFALSE) ? 0 : 1;
-	candidate->Charge = pythiaParticle->Charge;
+	candidate->PID = PID;
+	candidate->Status = (PythiaStatus > 0) ? 1 : ((PythiaStatus < 0) ? 2 : 0);
+	candidate->IsPU = (IsPU == kFALSE) ? 0 : 1;
+	candidate->Charge = Charge;
 
-	candidate->M1 = pythiaParticle->M1;
-	candidate->M2 = pythiaParticle->M2;
+	candidate->M1 = M1 + indexShift;
+	candidate->M2 = M2 + indexShift;
 
-	candidate->D1 = pythiaParticle->D1;
-	candidate->D2 = pythiaParticle->D2;
+	candidate->D1 = D1 + indexShift;
+	candidate->D2 = D2 + indexShift;
 
-	(candidate->Momentum).SetPxPyPzE(pythiaParticle->Px, pythiaParticle->Py, pythiaParticle->Pz, pythiaParticle->E);
-	(candidate->Position).SetXYZT(pythiaParticle->X, pythiaParticle->Y, pythiaParticle->Z, pythiaParticle->T);
+	(candidate->Momentum).SetPxPyPzE(Px, Py, Pz, E);
+	(candidate->Position).SetXYZT(X, Y, Z, T);
 
-	candidate->Mass = pythiaParticle->Mass;
-	candidate->CTau = pythiaParticle->CTau;
+	candidate->Mass = Mass;
+	candidate->CTau = CTau;
 }
 
 //------------------------------------------------------------------------------
