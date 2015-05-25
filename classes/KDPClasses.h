@@ -14,6 +14,7 @@ class ExRootTreeReader;
 namespace Pythia8
 {
 	class Pythia;
+	class Particle;
 }
 class DelphesFactory;
 class TObjArray;
@@ -62,31 +63,36 @@ class PythiaParticle : public TObject
 		Kinematic_t Mass; // particle mass
 		Kinematic_t CTau; // The actual decay lifetime (in the rest frame)
 
+		// These strings control the name of the Pythia TTree, as well as its sub-branches
 		static const char* const PYTHIA_TREE_NAME;
 		static const char* const PYTHIA_EVENT_INFO_BRANCH_NAME;
-		static const char* const PYTHIA_EVENT_RECORD_BRANCH_NAME;
+		static const char* const PYTHIA_EVENT_PARTICLE_BRANCH_NAME;
 
-		static ExRootTreeWriter* CreatePythiaOutputTree(TFile* const pythiaTreeFile);
+		// Thses helper functions create the Pythia master Tree and its sub-branches
+		static ExRootTreeWriter* NewPythiaWriter(TFile* const pythiaTreeFile);
 		static ExRootTreeBranch* CreateInfoBranch(ExRootTreeWriter* pythiaWriter);
-		static ExRootTreeBranch* CreateEventBranch(ExRootTreeWriter* pythiaWriter);
+		static ExRootTreeBranch* CreateParticleBranch(ExRootTreeWriter* pythiaWriter);
 
-		static ExRootTreeReader* LoadPythiaInputTree(TFile* const pythiaTreeFile);
+		// These helper functions read the Pythia master Tree and its sub-branches
+		static ExRootTreeReader* NewPythiaReader(TFile* const pythiaTreeFile);
 		static TClonesArray* GetInfoBranch(ExRootTreeReader* pythiaReader);
-		static TClonesArray* GetEventBranch(ExRootTreeReader* pythiaReader);
+		static TClonesArray* GetParticleBranch(ExRootTreeReader* pythiaReader);
 
-		void WritePythiaToTree(const Long64_t eventCounter, Pythia8::Pythia const* const pythia,
-			ExRootTreeBranch* const eventInfoBranch = 0, ExRootTreeBranch* const eventParticleBranch = 0, const Bool_t isPU = kFALSE);
+		// This helper function takes the current pythia event and stores it in the selected branches
+		static void WritePythia(const Long64_t eventCounter, Pythia8::Pythia* const pythia,
+			ExRootTreeBranch* const eventParticleBranch, ExRootTreeBranch* const eventInfoBranch = 0, const Bool_t isPU = kFALSE);
+		// The above helper function utilizes these worker functions
+		static void WriteInfo(const Long64_t eventCounter,
+			Pythia8::Pythia* const pythia, ExRootTreeBranch* const eventInfoBranch);
 
-		void FillDelphesFactoryCandidatesFromPythiaTree(DelphesFactory* const factory,
-			TObjArray* const allParticleOutputArray, TClonesArray const* const pythiaEventRecordArray,
-			ExRootTreeBranch* const eventInfo = 0, TClonesArray const* const pythiaEventInfoArray = 0, const Float_t unitWeight = 0.);
+		void Initialize(const Pythia8::Particle& original, const Bool_t isPU = kFALSE);
 
-		void FillExternalCandidatesFromPythiaTree(ExRootTreeBranch* const newCandidateBranch,
-			TObjArray* const allParticleOutputArray, TClonesArray const* const pythiaEventRecordArray,
-			ExRootTreeBranch* const eventInfo = 0, TClonesArray const* const pythiaEventInfoArray = 0, const Float_t unitWeight = 0.);
-
-		static void FillInfo(ExRootTreeBranch* const eventInfo, TClonesArray const* const pythiaEventInfoArray, const Float_t unitWeight);
-		static void FillCandidate(Candidate* const candidate, PythiaParticle const* const pythiaParticle);
+		// Originally, a helper function was provided to read the Pythia tree
+		// However, it was found that a different function was required for each purpose
+		// Therefore, only worker functions to copy the data are provided
+		static void CopyInfo(ExRootTreeBranch* const eventInfo,
+			TClonesArray const* const pythiaEventInfoArray, const Float_t unitWeight = 0.);
+		void FillCandidate(Candidate* const candidate, const Int_t indexShift = 0) const;
 
 		ClassDef(PythiaParticle, 2)
 };
