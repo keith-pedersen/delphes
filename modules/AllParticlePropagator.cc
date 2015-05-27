@@ -42,9 +42,11 @@ Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Do
 // This code deliberately eschews TMath
 
 AllParticlePropagator::AllParticlePropagator():
-	fRadius(0.), fRadius2(0.), fHalfLength(0.), 	fBz(0.), fMinTrackLength(0.),
-	fInputList(), currentInputArray(0), fOutputArray(0), fChargedHadronOutputArray(0), fElectronOutputArray(0),
-	fMuonOutputArray(0) {}
+	fRadius(0.), fRadius2(0.), fHalfLength(0.), 	fBz(0.), fMinTrackLength(0.), fMeanPileup(0.),
+	fInputList(), currentInputArray(0),
+	pileupStore(), pileupArraysToStore(), pileupFactory(0),
+	fOutputArray(0), fChargedHadronOutputArray(0), fElectronOutputArray(0),	fMuonOutputArray(0)
+{}
 AllParticlePropagator::~AllParticlePropagator() {}
 
 //------------------------------------------------------------------------------
@@ -845,6 +847,8 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 				// Clear the currentInputArray
 				currentInputArray->Clear();
 
+				temporaryPileupFactory.Clear();
+
 				PythiaParticle const* pythiaParticle;
 				Candidate* candidate;
 				TIterator* itEventRecord = pileupEventRecord->MakeIterator();
@@ -852,6 +856,7 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 				while((pythiaParticle = static_cast<PythiaParticle const*>(itEventRecord->Next())))
 				{
 					candidate = static_cast<Candidate*>(temporaryPileupFactory.NewEntry());
+					candidate->Clear();
 					currentInputArray->Add(candidate);
 
 					pythiaParticle->FillCandidate(candidate);
@@ -900,15 +905,10 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 						Candidate*& permanentCandidate = permanentPileup[candidate];
 						if(permanentCandidate == 0)
 						{
-							cout << "NewCandidate\n";
 							permanentCandidate = static_cast<Candidate*>(pileupFactory->NewEntry());
 							candidate->Copy(*permanentCandidate);
 							permanentCandidate->SetFactory(factory); // This is done so that the Delphes factory is in charge of Candidate::Clone() (e.g. MomentumSmearing will Clone pileup)
 							TProcessID::AssignID(permanentCandidate);
-						}
-						else
-						{
-							cout << "SeenThisOneAlready\n";
 						}
 	
 						thisStoreArray.push_back(permanentCandidate);
@@ -923,7 +923,7 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 		delete currentInputArray;
 		currentInputArray = 0;
 		delete pileupReader;
-		delete pileupFile;
+		delete pileupFile;		
 	}
 
 	fOutputArray->Clear();
