@@ -289,7 +289,7 @@ Float_t LHCOWriterDirect::MotherFlavor(Candidate* candidate)
 {
 	Int_t flavor = -99; // An unsupported flavor, indicating that fAllParticles was not supplied
 
-	if(fAllParticles)
+	if(fAllParticles and (candidate->IsPU == 0)) // Cannot assume that pileup is dereferenceable
 	{
 		Int_t pid = 0; // Another unsupported flavor, indicating that something went wrong
 

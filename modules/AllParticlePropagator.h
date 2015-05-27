@@ -122,6 +122,7 @@
  */
 
 #include "classes/DelphesModule.h"
+#include <vector>
 
 class Candidate;
 class TObjArray;
@@ -160,6 +161,9 @@ class AllParticlePropagator: public DelphesModule
 		// Charged particles require helicle propagation. To keep Propagate(...) clean,
 		// helicle propagation is accomplished in a separate function.
 
+		void PropagateAndStorePileup(const std::string& pileupFileName);
+		void FillPileup();
+
 		Double_t fRadius, fRadius2;     //    supplied in [meters], converted to [mm] by Init()
 		                                // Radius of full tracker cylinder (and squared radius, for re-use)
 
@@ -173,11 +177,21 @@ class AllParticlePropagator: public DelphesModule
 		                                // Used for a quick pre-sort of tracks which are entirely
 		                                // too small to show up in charged OutputArrays
 
+		Double_t fMeanPileup;              //    supplied as Integer
+		                                // Average number of pileup events. Use to parameterize a
+		                                // Poisson distribution that randomly chooses number of
+		                                // pileup per event.
+
 		// It would be nice to parameterize the energy loss, but this is not supported yet.
 
 		// Input
 		std::vector<TObjArray*> fInputList; //! use "add InputArray @$%!" in configuration card
 		TObjArray* currentInputArray; //!
+
+		// Pileup
+		std::vector<std::vector<std::vector<Candidate*> > > pileupStore;
+		std::vector<TObjArray*> pileupArraysToStore;
+		ExRootTreeBranch* pileupFactory;
 
 		// Output
 		TObjArray* fOutputArray; //! Particles that intersect the cylinder

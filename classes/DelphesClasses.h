@@ -441,6 +441,7 @@ public:
 class Candidate: public SortableObject
 {
   friend class DelphesFactory;
+  friend class AllParticlePropagator; // This is so we can access SetFactory
 
 public:
   Candidate();
