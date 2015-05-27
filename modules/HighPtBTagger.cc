@@ -128,7 +128,7 @@ void HighPtBTagger::Init()
 	fCoreMassHypothesis = GetDouble("CoreMassHypothesis", 2.0);
 	fCoreMassHypothesis2 = Squared(fCoreMassHypothesis);
 
-	fSubjetMassHypothesis = GetDouble("SubjetMassHypothesis", 5.3);	
+	fSubjetMassHypothesis = GetDouble("SubjetMassHypothesis", 5.3);
 
 	fMinFinalMass = GetDouble("MinFinalMass", 5.3);
 	fMaxFinalMass = GetDouble("MaxFinalMass", fMinFinalMass*2);
@@ -246,10 +246,12 @@ void HighPtBTagger::Process()
 					//      If the mother is a tau, we consider the grandmother the mother (because we are interested in hadron flavor)
 					for(std::vector<Candidate*>::iterator itMuon = goodMuons.begin(); itMuon != goodMuons.end(); ++itMuon)
 					{
-						bool noMotherYet = true;
-
 						Candidate const* matriarch;
+
+						// We need to account for PileUp, which may not have fully derefernceable mothers
+						if((*itMuon)->IsPU == 0)
 						{
+							bool noMotherYet = true;
 							// To look back all the way to hadronization, we find the first matriarch with
 							// two seperate mothers (more than 1 mother means color charge still existed)
 							Candidate const* possibleMatriarch = static_cast<Candidate*>(fAllParticles->At((*itMuon)->M1));
@@ -287,9 +289,8 @@ void HighPtBTagger::Process()
 								}
 							}while(possibleMatriarch);
 
-							// Record the muon's matriarch
-							goodMuonsMatriarch.push_back(matriarch);
-							(*itMuon)->TauTag = abs(matriarch->PID);
+							// Store the matriarch's PID
+							(*itMuon)->TauTag = matriarch ? abs(matriarch->PID) : 0;
 
 							if(noMotherYet)
 							{
@@ -308,6 +309,15 @@ void HighPtBTagger::Process()
 								(muonP3.Cross(matriarchP3)).Mag() /
 								((matriarch->Momentum).M() * muonP3.Dot(matriarchP3));
 						}
+						else
+						{
+							matriarch = 0; // Pile-up is assumed to be non-derferenceable, so it has no matriarch
+
+							// Use default values for BTag, TauTag, and Tau[2]
+						}
+
+						// Record the muon's matriarch
+						goodMuonsMatriarch.push_back(matriarch);
 					}
 				}
 
@@ -435,7 +445,7 @@ void HighPtBTagger::Process()
 
 								// Instead of the minCore, find the core with mass closest to target
 								const Double_t deltaMass = abs(sqrt(fCoreMassHypothesis2 + 4. * hardestMuon.E() * subjet.E() * (g + y) / (1. + (y + sqrt(1. - ((g - y) + g*y))))) - fSubjetMassHypothesis);
-								
+
 								if(deltaMass < minDeltaMass)
 								{
 									minDeltaMass = deltaMass;
@@ -511,6 +521,8 @@ void HighPtBTagger::Process()
 										jet->Momentum += muonP4;
 
 									// Figure out if adding the muon twice helps orient the subjet
+									// PU should have a zero matriarch, and can use the default values for FracPt
+									if(goodMuonsMatriarch[iMu])
 									{
 										const TVector3 matriarchP3 = (goodMuonsMatriarch[iMu]->Momentum).Vect();
 
