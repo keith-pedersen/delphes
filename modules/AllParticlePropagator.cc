@@ -802,10 +802,6 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 		// Get the TClonesArray for the pileup particles
 		TClonesArray* pileupEventRecord = PythiaParticle::GetParticleBranch(pileupReader);
 
-		// Create a Candidate factory for pileup (the Delphes factory is cleared after each event,
-		// whereas the pileup Candidate's need to survive the entire run)
-		pileupFactory = new ExRootTreeBranch("PileupFactory", Candidate::Class());
-
 		// Create a TObjArray for the filled Candidates (initial capacity 1024)
 		currentInputArray = new TObjArray(1024);
 
@@ -824,6 +820,20 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 
 		DelphesFactory* factory = GetFactory();
 
+		// Since we will not have access to the full event record, there is no sense in keeping it arround.
+		// Thus, to save space, we should only keep around the Candidates that are in the output vectors.
+		// (This is partially a problem because the Candidate is so bloated with Jet stuff)
+
+		// Step1. Create a temporary Candidate factory for pileup. This is where we will copy the full event record
+		ExRootTreeBranch temporaryPileupFactory("TemporaryPileupFactory", Candidate::Class());
+
+		// Also create a permanent factory for the pileup Candidate which stick around (the Delphes factory is cleared after each event, 
+		// whereas the pileup Candidate's need to survive the entire run)
+		pileupFactory = new ExRootTreeBranch("PileupFactory", Candidate::Class());
+
+		// Finally, create a map from the temporary to permanent pointers
+		std::map<Candidate*, Candidate*> permanentPileup;
+
 		for(Long64_t entry = 0; entry < pileupStoreSize; ++entry)
 		{
 			cout << "-"; // A progress bar
@@ -841,9 +851,7 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 
 				while((pythiaParticle = static_cast<PythiaParticle const*>(itEventRecord->Next())))
 				{
-					candidate = static_cast<Candidate*>(pileupFactory->NewEntry());
-					candidate->SetFactory(factory); // This is done so that the Delphes factory is in charge of Candidate::Clone() (e.g. MomentumSmearing)
-					TProcessID::AssignID(candidate);
+					candidate = static_cast<Candidate*>(temporaryPileupFactory.NewEntry());
 					currentInputArray->Add(candidate);
 
 					pythiaParticle->FillCandidate(candidate);
@@ -872,7 +880,8 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 				delete itAllParticles;
 			}
 
-			//Now loop through the output arrays and copy their objects to the storage vector
+			// Now loop through the output arrays and copy their objects to the storage vector
+			// Step1: keep a running list of Candidates which exist in an output list
 			{
 				std::vector<std::vector<Candidate*> >& thisEntryStore = pileupStore[entry];
 
@@ -887,7 +896,23 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 					TIterator* itCandidate = thisAPProArray->MakeIterator();
 
 					while((candidate = static_cast<Candidate*>(itCandidate->Next())))
-						thisStoreArray.push_back(candidate);
+					{
+						Candidate*& permanentCandidate = permanentPileup[candidate];
+						if(permanentCandidate == 0)
+						{
+							cout << "NewCandidate\n";
+							permanentCandidate = static_cast<Candidate*>(pileupFactory->NewEntry());
+							candidate->Copy(*permanentCandidate);
+							permanentCandidate->SetFactory(factory); // This is done so that the Delphes factory is in charge of Candidate::Clone() (e.g. MomentumSmearing will Clone pileup)
+							TProcessID::AssignID(permanentCandidate);
+						}
+						else
+						{
+							cout << "SeenThisOneAlready\n";
+						}
+	
+						thisStoreArray.push_back(permanentCandidate);
+					}
 
 					delete itCandidate;
 				}
