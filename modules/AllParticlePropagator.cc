@@ -1,11 +1,20 @@
 #include "classes/DelphesClasses.h"
 #include "classes/DelphesFactory.h"
+#include "classes/KDPClasses.h"
 #include "TLorentzVector.h"
 #include "Pythia8/Pythia.h"
 #include <cmath>
 #include "AllParticlePropagator.h"
 
 #include <cstdio>
+
+//#include "TROOT.h"
+#include "TRandom.h"
+#include "TFile.h"
+#include "TClonesArray.h"
+
+#include "ExRootAnalysis/ExRootTreeReader.h"
+#include "ExRootAnalysis/ExRootTreeBranch.h"
 
 const Double_t c_light = 299792458.; // [m/s]
 const Double_t PI = acos(-1.);
@@ -81,6 +90,21 @@ void AllParticlePropagator::Init()
 	fChargedHadronOutputArray = ExportArray(GetString("ChargedHadronOutputArray", "chargedHadrons"));
 	fElectronOutputArray = ExportArray(GetString("ElectronOutputArray", "electrons"));
 	fMuonOutputArray = ExportArray(GetString("MuonOutputArray", "muons"));
+
+	// Deal with pileup
+	// The fastest way to do this is to propagate all the pileup during initialization,
+	// storing the resulting Candidates in sorted arrays. Then, during each event, the
+	// stored pileup arrays can be copied to the master array for that event
+	fMeanPileup = GetDouble("MeanPileup", 0.);
+
+	PropagateAndStorePileup(std::string(GetString("PileupFile", "")));
+}
+
+//------------------------------------------------------------------------------
+
+void AllParticlePropagator::Finish()
+{
+	delete pileupFactory;
 }
 
 //------------------------------------------------------------------------------
@@ -106,11 +130,9 @@ void AllParticlePropagator::Process()
 
 		delete itInput;
 	}
+
+	FillPileup();
 }
-
-//------------------------------------------------------------------------------
-
-void AllParticlePropagator::Finish() {/* No memory to clean up */}
 
 //------------------------------------------------------------------------------
 
@@ -750,6 +772,192 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		delete thisRotation;
 		return false;
 	}
+}
+
+//------------------------------------------------------------------------------
+
+void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFileName)
+{
+	if(pileupFileName.length() == 0)
+	{
+		if(fMeanPileup > 0.)
+			throw runtime_error("No pileup file supplied, even though MeanPileup > 0");
+	}
+	else
+	{
+		cout << "=================> Propagating and Storing Pileup <=================\n";
+
+		TFile* pileupFile = TFile::Open(pileupFileName.c_str(), "READ");
+		if(not pileupFile)
+			throw runtime_error("Can't find pileup file <" + pileupFileName + ">");
+
+		ExRootTreeReader* pileupReader = PythiaParticle::NewPythiaReader(pileupFile);
+		Long64_t pileupStoreSize = pileupReader->GetEntries(); // Long64_t is the type used by ExRootTreeReader::ReadEntry()
+
+		if(pileupStoreSize == 0)
+			throw runtime_error("Can't read Pythia EventRecord from <" + pileupFileName + "> or contains no events!\n");
+		else if(Double_t(pileupStoreSize) < 3. * fMeanPileup)
+			throw runtime_error("Pileup file <" + pileupFileName + "> does not contain enough events for supplied mean!\n Contains = " + to_string((long long int)pileupStoreSize) + ", Mean = " + to_string((long double)fMeanPileup) + "\n");
+
+		// Get the TClonesArray for the pileup particles
+		TClonesArray* pileupEventRecord = PythiaParticle::GetParticleBranch(pileupReader);
+
+		// Create a Candidate factory for pileup (the Delphes factory is cleared after each event,
+		// whereas the pileup Candidate's need to survive the entire run)
+		pileupFactory = new ExRootTreeBranch("PileupFactory", Candidate::Class());
+
+		// Create a TObjArray for the filled Candidates (initial capacity 1024)
+		currentInputArray = new TObjArray(1024);
+
+		// Now record the arrays that will be stored in pileupStore
+		//  * stableParticles
+		//  * chargedHadrons
+		//  * electrons
+		//  * muons
+		pileupArraysToStore.push_back(fOutputArray);
+		pileupArraysToStore.push_back(fChargedHadronOutputArray);
+		pileupArraysToStore.push_back(fElectronOutputArray);
+		pileupArraysToStore.push_back(fMuonOutputArray);
+
+		// Ready the pileupStore by filling it with a bunch of empty vectors
+		pileupStore = std::vector<std::vector<std::vector<Candidate*> > >(pileupStoreSize, std::vector<std::vector<Candidate*> >(pileupArraysToStore.size()));
+
+		DelphesFactory* factory = GetFactory();
+
+		for(Long64_t entry = 0; entry < pileupStoreSize; ++entry)
+		{
+			cout << "-"; // A progress bar
+
+			// Copy the Pythia particles to Candidates
+			{
+				// Read the current Pythia event record
+				pileupReader->ReadEntry(entry);
+				// Clear the currentInputArray
+				currentInputArray->Clear();
+
+				PythiaParticle const* pythiaParticle;
+				Candidate* candidate;
+				TIterator* itEventRecord = pileupEventRecord->MakeIterator();
+
+				while((pythiaParticle = static_cast<PythiaParticle const*>(itEventRecord->Next())))
+				{
+					candidate = static_cast<Candidate*>(pileupFactory->NewEntry());
+					candidate->SetFactory(factory); // This is done so that the Delphes factory is in charge of Candidate::Clone() (e.g. MomentumSmearing)
+					TProcessID::AssignID(candidate);
+					currentInputArray->Add(candidate);
+
+					pythiaParticle->FillCandidate(candidate);
+				}
+
+				delete itEventRecord;
+			}
+
+			// Propagate all particles
+			{
+				// Clear the output arrays
+				for(std::vector<TObjArray*>::iterator itArray = pileupArraysToStore.begin(); itArray not_eq pileupArraysToStore.end(); ++itArray)
+					(*itArray)->Clear();
+
+				TIterator* itAllParticles = currentInputArray->MakeIterator();
+
+				// Loop through all particles sequentially
+				while(Propagate(static_cast<Candidate*>(itAllParticles->Next()), 0));
+				// Once Propagate finds a particle that bends, it will recursively propagate
+				// the entire decay chain, skipping ahead in the event record (but without
+				// affecting itInput). Hence, once Propagate finally returns, the itInput loop
+				// is guarenteed to iterate over particles which have already been propagated.
+				// This is why Propagate always checks to see if TrackLength < 0 first (as
+				// it will only be < 0 when the particle has yet to be Propagted).
+
+				delete itAllParticles;
+			}
+
+			//Now loop through the output arrays and copy their objects to the storage vector
+			{
+				std::vector<std::vector<Candidate*> >& thisEntryStore = pileupStore[entry];
+
+				Candidate* candidate = 0;
+
+				for(size_t iArray = 0; iArray < pileupArraysToStore.size(); ++iArray)
+				{
+					std::vector<Candidate*>& thisStoreArray = thisEntryStore[iArray];
+					TObjArray const* const thisAPProArray = pileupArraysToStore[iArray];
+
+					thisStoreArray.reserve(thisAPProArray->GetEntriesFast());
+					TIterator* itCandidate = thisAPProArray->MakeIterator();
+
+					while((candidate = static_cast<Candidate*>(itCandidate->Next())))
+						thisStoreArray.push_back(candidate);
+
+					delete itCandidate;
+				}
+			}
+		}
+		cout << "\n"; // End the progress bar
+
+		delete currentInputArray;
+		currentInputArray = 0;
+		delete pileupReader;
+		delete pileupFile;
+	}
+
+	fOutputArray->Clear();
+	fChargedHadronOutputArray->Clear();
+	fElectronOutputArray->Clear();
+	fMuonOutputArray->Clear();
+}
+
+//------------------------------------------------------------------------------
+
+void AllParticlePropagator::FillPileup()
+{
+	std::vector<UInt_t> pileupIndices;
+
+	// Fill pileupIndices
+	{
+		const UInt_t numPileup = gRandom->Poisson(fMeanPileup);
+
+		const UInt_t sizePileupStore = pileupStore.size();
+		if(numPileup > sizePileupStore)
+			throw runtime_error("AllParticlePropagator::FillPileup: random Poisson (" + to_string((long long int) numPileup) + ")larger than pileup store!");
+
+		// Fill pileup WITHOUT replacement by recording indices already selected
+		std::vector<bool> alreadySelected(sizePileupStore, false);
+		pileupIndices.reserve(numPileup);
+
+		while(pileupIndices.size() < numPileup)
+		{
+			UInt_t indexCandidate = gRandom->Integer(sizePileupStore);
+			if(not alreadySelected[indexCandidate])
+			{
+				alreadySelected[indexCandidate] = true;
+				pileupIndices.push_back(indexCandidate);
+			}
+		}
+	}
+
+	for(std::vector<UInt_t>::iterator itIndex = pileupIndices.begin(); itIndex not_eq pileupIndices.end(); ++itIndex)
+	{
+		std::vector<std::vector<Candidate*> >& thisEntryStore = pileupStore[*itIndex];
+
+		// Currently, we do not include the entire event record -- only the particles are tracked, or hit the edge
+		// Thus, it is not meaningful (and potentially dangerous) to use the Mother/Daughter indices of pileup to trace the lineage
+		// If we were to include the entire event record (at a later date) we would need to re-index the pileup EACH time it is added
+		// to "Delphes/allParticleArray" (reading the mother/daughter index of the system line (At(0)) to figure out what the LAST shift was,
+		// then finding the difference between the new shift to re-shift).
+		for(size_t iArray = 0; iArray < pileupArraysToStore.size(); ++iArray)
+		{
+			std::vector<Candidate*>& thisStoreArray = thisEntryStore[iArray];
+			TObjArray* const thisAPProArray = pileupArraysToStore[iArray];
+
+			for(std::vector<Candidate*>::iterator itCandidate = thisStoreArray.begin(); itCandidate not_eq thisStoreArray.end(); ++itCandidate)
+			{
+				//cout << (*itCandidate)->IsPU << "\t";
+				thisAPProArray->Add(*itCandidate);
+			}
+		}
+	}
+	//cout << endl << "exiting loop" << endl;
 }
 
 //------------------------------------------------------------------------------
