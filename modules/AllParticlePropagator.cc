@@ -829,7 +829,7 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 		// Step1. Create a temporary Candidate factory for pileup. This is where we will copy the full event record
 		ExRootTreeBranch temporaryPileupFactory("TemporaryPileupFactory", Candidate::Class());
 
-		// Also create a permanent factory for the pileup Candidate which stick around (the Delphes factory is cleared after each event, 
+		// Also create a permanent factory for the pileup Candidate which stick around (the Delphes factory is cleared after each event,
 		// whereas the pileup Candidate's need to survive the entire run)
 		pileupFactory = new ExRootTreeBranch("PileupFactory", Candidate::Class());
 
@@ -907,10 +907,17 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 						{
 							permanentCandidate = static_cast<Candidate*>(pileupFactory->NewEntry());
 							candidate->Copy(*permanentCandidate);
+
+							// Clear the Mother/Daughter indices, since they are intrinsically unreferenceable
+							permanentCandidate->M1 = 0;
+							permanentCandidate->M2 = 0;
+							permanentCandidate->D1 = 0;
+							permanentCandidate->D2 = 0;
+
 							permanentCandidate->SetFactory(factory); // This is done so that the Delphes factory is in charge of Candidate::Clone() (e.g. MomentumSmearing will Clone pileup)
 							TProcessID::AssignID(permanentCandidate);
 						}
-	
+
 						thisStoreArray.push_back(permanentCandidate);
 					}
 
@@ -923,7 +930,7 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 		delete currentInputArray;
 		currentInputArray = 0;
 		delete pileupReader;
-		delete pileupFile;		
+		delete pileupFile;
 	}
 
 	fOutputArray->Clear();
