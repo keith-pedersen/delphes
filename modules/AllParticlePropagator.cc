@@ -603,7 +603,6 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 	// (hence we don't need to do any angular subtraction, and subject our angle to epsilon error).
 
 	Double_t phi0; // The initial anglular position (in hxPr) will be set in a moment
-	const VecXY beta = rBeam_hx * R_hx; // This vector will be explained just before phi0 is set
 
 	// Finish the notLooper calculations
 	if(notLooper)
@@ -634,14 +633,13 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// the helix coordinate system.  Thus, the particle's initial angular position
 			// (phi0) can be found from r0>_hx and rBeam>_hx.
 			//
-			// The most accurate way to find the angle between two vectors is NOT:
+			// The most accurate way to find the (interior) angle between two vectors is NOT:
 			//     acos(a>.b>/sqrt(a>.a> * b>.b>))
-			// but (per W. Kahan):
+			// but (per my personal research):
 			//
-			//     2*atan(sqrt((alpha> - beta>)**2/(alpha> + beta>)**2)
+			//     atan2(sqrt(tan(a>, b>)^2), sign(a>.b>)
 			//
-			// where (alpha> = Beta*alpha>) and (beta> = Alpha*beta>). This
-			// form may seem like overkill, but the acos form loses precision
+			// This form may seem like overkill, but the acos form loses precision
 			// for exactly the particles we need extra precision for: super
 			// energetic particles that don't bend very much, and thus start
 			// very close to apogee. Such particles really need to show up
@@ -654,10 +652,12 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			//
 			//    sign(phi0) = sign(rBeam>_hx x r0>_hx)
 
-			const VecXY alpha = r0_hx * RBeam_hx;
+			const Double_t
+				cross0 = rBeam_hx.Cross(r0_hx),
+				dot0 = rBeam_hx.Dot(r0_hx);
 
-			phi0 = copysign(2*atan(sqrt((alpha - beta).Norm2()/(alpha + beta).Norm2())),
-					rBeam_hx.Cross(r0_hx));
+			phi0 = copysign(atan2(sqrt((cross0*cross0)/(dot0*dot0)), copysign(1., dot0)),
+						cross0);
 			// Here copysign is safe because if rBeam_hx.Cross(r0_hx) = +/- 0,
 			// then either the particle is at perigree or apogee. If it's at
 			// perigree, then phi = +/-0 (and the sign of zero shouldn't matter).
@@ -713,9 +713,15 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		const Double_t ctBarrel = (atan2(sinEpsilon, cosEpsilon) - phi0) / omegaOverC;
 
 		if(abs(cosEpsilon) > 1.)
+		{
+			printf("\n\nsin: %.17e\ncos: %.17e\n\n", sinEpsilon, cosEpsilon);
 			throw runtime_error("(AllParticlePropagator::PropagateHelicly): |cosEpsilon| > 1, numerical error!");
+		}
 		if(abs(sinEpsilon) > 1.)
+		{
+			printf("\n\nsin: %.17e\ncos: %.17e\n\n", sinEpsilon, cosEpsilon);
 			throw runtime_error("(AllParticlePropagator::PropagateHelicly): |sinEpsilon| > 1, numerical error!");
+		}
 
 		if(ctBarrel <= ctProp) // The barrel exit is the closest exit
 		{
