@@ -30,7 +30,7 @@
  *       2a.    (ptMu > fMinMuonPt)
  *  3. Look for a hard central core carrying a majority of the jet's pt
  *       3a. Cluster the jet's constituents using anti-kt with (R = fCoreAntiktR)
- *       3b. Require "the core" (highest pt sub-jet) to have (pt_subjet / pt_jet >= fMinCoreRatio)
+ *       3b. Require "the core" (highest pt sub-jet) to have (pt_subjet / pt_jet >= fBCoreRatio)
  *           and also still contain the muon.
  *  4. Adjust the core's 4-vector to account for the unobserved neutrino
  *       3a. Add the muon again to estimate the neutrino, BUT only project out the
@@ -38,7 +38,7 @@
  *           direction of the jet, and keep the neutrino massless, so the jet mass
  *           doesn't change.
  *  5. Find the mass of the core, given a B quark hypothesis
- *       5a.   coreMass = max(fMinCoreMass, mass(pMu_core))
+ *       5a.   coreMass = max(fBCoreMass, mass(pMu_core))
  *  6. Find the boost (gamma) of the core, using its mass
  *       6a. This "mass" essentially comes from an angular spread of energy in the
  *           calorimeter, and depends only on the hard central components, so it
@@ -92,12 +92,13 @@ class HighPtBTagger: public DelphesModule
 
 	private:
 		Int_t fBitNumber;
+		Int_t fMaxJetRank;
 		Double_t fMinJetPt;
 		Double_t fMinMuonPt;
 		Double_t fMinTowerPtRatio;
 		Double_t fCoreAntiktR;
-		Double_t fMinCoreMinBoost;
-		Double_t fMinCoreMinBoost2;
+		Double_t fBCoreMinBoost;
+		Double_t fBCoreMinBoost2;
 		Double_t fCorePtRatioMin;
 		Double_t fCoreMassHypothesis;
 		Double_t fCoreMassHypothesis2;

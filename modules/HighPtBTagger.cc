@@ -101,12 +101,10 @@ Double_t AccurateAngle(const TVector3& one, const TVector3& two)
 	// This has a relative error of 0.5*epsilon / angle**2 (where epsilon is machine epsilon)
 	// due to catastrophic cancellation
 
-	// A form suggested by WK (in "How Mindless"),  accurate over all domains
-	const TVector3
-		v1 = one*two.Mag(),
-		v2 = two*one.Mag();
+	// This form is better (from my personal experiments)
+	const Double_t dot = one.Dot(two);
 
-	return 2*atan(sqrt((v1-v2).Mag2()/(v1+v2).Mag2()));
+	return atan2(sqrt((one.Cross(two)).Mag2()/(dot*dot)), std::copysign(1., dot));
 }
 
 void HighPtBTagger::Init()
@@ -115,6 +113,8 @@ void HighPtBTagger::Init()
 
 	fBitNumber = GetInt("BitNumber", 3);
 
+	fMaxJetRank = GetInt("MaxJetRank", 4);
+
 	fMinJetPt = GetDouble("MinJetPt", 500.);
 	fMinMuonPt = GetDouble("MinMuonPt", 10.);
 
@@ -122,8 +122,8 @@ void HighPtBTagger::Init()
 	fCoreAntiktR = GetDouble("CoreAntiktR", .04);
 	fCorePtRatioMin = GetDouble("CorePtRatioMin", .5);
 
-	fMinCoreMinBoost = GetDouble("MinCoreMinBoost", 1.);
-	fMinCoreMinBoost2 = Squared(fMinCoreMinBoost);
+	fBCoreMinBoost = GetDouble("BCoreMinBoost", 1.);
+	fBCoreMinBoost2 = Squared(fBCoreMinBoost);
 
 	fCoreMassHypothesis = GetDouble("CoreMassHypothesis", 2.0);
 	fCoreMassHypothesis2 = Squared(fCoreMassHypothesis);
@@ -159,11 +159,11 @@ void HighPtBTagger::Finish()
 //     Jet with:
 //        good muons (potential for tagging) ........... TauTag == numMuons
 //        viable HardCore .............................. FracPt[0] > 0.
-//        viable MinCore (which isn't the HardCore) .... FracPt[1] > 0.
+//        viable BCore (which isn't the HardCore) .... FracPt[1] > 0.
 //     Muon:
 //        good muon in jet with interesting pt ......... BTag/TauTag non-zero
 //        good muon in jet with interesting core ....... Tau[2] > 0. / Tau[0] > 0. / FracPt[0] < 8.
-//        good muon in jet with distinct MinCore ....... Tau[1] > 0. / FracPt[1] < 8.
+//        good muon in jet with distinct BCore ....... Tau[1] > 0. / FracPt[1] < 8.
 
 void HighPtBTagger::Process()
 {
@@ -171,16 +171,21 @@ void HighPtBTagger::Process()
 	Candidate* jet;
 	fItJetInputArray->Reset();
 
-	while((jet = static_cast<Candidate*>(fItJetInputArray->Next())))
+	Int_t jetRank = 0;
+
+	while((jet = static_cast<Candidate*>(fItJetInputArray->Next())) and (++jetRank <= fMaxJetRank))
 	{
 		const Double_t jetOriginalPt = jet->Momentum.Pt();
 
-		// Set used fields to NULL values
-		jet->FracPt[0] = -1.;
-		jet->FracPt[1] = -1.;
-		jet->Tau[0] = -1;
-		jet->Tau[1] = -1;
-		jet->TauTag = 0;
+		// Set used fields to NULL values (checked 23.06.2015)
+		{
+			jet->FracPt[0] = -1.;   // f_subjet of HardCore
+			jet->FracPt[1] = -1.;   // f_subjet of BCore
+			jet->Tau[0] = -1;       // x_min for HardCore
+			jet->Tau[1] = -1;       // x_min for BCore
+			jet->TauTag = 0;        // Number of Good Muons
+			// Do not clear BTag, since we only set one bit
+		}
 
 		// At best, neutrino estimation can only double the pt of the jet,
 		// so only look at jets with at least half the required final pt
@@ -190,7 +195,7 @@ void HighPtBTagger::Process()
 			std::vector<Candidate*> goodMuons;
 			std::vector<Candidate const*> everythingElse;
 
-			// Fill goodMuons & everythingElse (CHECKED 14.04.2015)
+			// Fill goodMuons & everythingElse (CHECKED 23.06.2015)
 			{
 				TIter itJetConstituents(jet->GetCandidates());
 				Candidate* constituent;
@@ -205,11 +210,14 @@ void HighPtBTagger::Process()
 						if((constituent->Momentum).Pt() >= fMinMuonPt)
 						{
 							// Set used fields to NULL values;
-							constituent->Tau[0] = -1.;
-							constituent->Tau[1] = -1.;
-							constituent->Tau[2] = -1.;
-							constituent->FracPt[0] = 8.;
-							constituent->FracPt[1] = 8.;
+							constituent->Tau[0] = -1.;      // x_HardCore
+							constituent->Tau[1] = -1.;      // x_BCore
+							constituent->Tau[2] = -1.;      // x_True
+							constituent->FracPt[0] = 8.;    // deltaAngle(recoHardCore, matriarch) from adding muon twice
+							constituent->FracPt[1] = 8.;    // deltaAngle(recoBCore, matriarch) from adding muon twice
+							constituent->BTag = 0;          // abs(PID_mother)
+							constituent->TauTag = 0;        // abs(PID_matriarch)
+
 							goodMuons.push_back(constituent);
 							continue;
 						}
@@ -234,17 +242,17 @@ void HighPtBTagger::Process()
 				}
 
 				std::vector<Candidate const*> goodMuonsMatriarch;
-				// Find the muon matriarch and mother (CHECKED 14.04.2015)
+				// Find the muon matriarch and mother (CHECKED 23.06.2015)
 				// Store inside each muon
-				//       Muon.BTag = abs(motherPID)
-				//       Muon.TauTag = abs(matriarchPID)
+				//       Muon.BTag = abs(PID_mother)
+				//       Muon.TauTag = abs(PID_matriarch)
 				//       Muon.Tau[2] = xTrue (real x to matriarch)
 				{
 					// * The "matriarch" is the original boosted primary hadron
 					//      We need to look back all the way to the start of hadronization.
 					// * The "mother" is the particle which emitted the muon
 					//      If the mother is a tau, we consider the grandmother the mother (because we are interested in hadron flavor)
-					for(std::vector<Candidate*>::iterator itMuon = goodMuons.begin(); itMuon != goodMuons.end(); ++itMuon)
+					for(auto itMuon = goodMuons.begin(); itMuon != goodMuons.end(); ++itMuon)
 					{
 						Candidate const* matriarch;
 
@@ -256,63 +264,69 @@ void HighPtBTagger::Process()
 							// two seperate mothers (more than 1 mother means color charge still existed)
 							Candidate const* possibleMatriarch = static_cast<Candidate*>(fAllParticles->At((*itMuon)->M1));
 
-							do
+							if(not possibleMatriarch)
+								matriarch = 0;
+							else
 							{
-								const UInt_t absPossibleMatriarchPID = abs(possibleMatriarch->PID);
-								matriarch = possibleMatriarch;
-
-								// Tau cannot be mother, we want hadrons
-								if(noMotherYet and (absPossibleMatriarchPID not_eq 15))
+								while(possibleMatriarch)
 								{
-									noMotherYet = false;
-									(*itMuon)->BTag = absPossibleMatriarchPID;
+									const UInt_t absPossibleMatriarchPID = abs(possibleMatriarch->PID);
+									matriarch = possibleMatriarch;
+
+									// Tau cannot be mother, we want hadrons
+									if(noMotherYet and (absPossibleMatriarchPID not_eq 15))
+									{
+										noMotherYet = false;
+										(*itMuon)->BTag = absPossibleMatriarchPID;
+									}
+
+									// Check to see if we've found the matriarch
+									if( (not ((possibleMatriarch->M2 == 0) or (possibleMatriarch->M2 == possibleMatriarch->M1))) or
+										((absPossibleMatriarchPID >= 22) and (absPossibleMatriarchPID <= 24)))
+									{
+										// First check (post hadronic)
+										// Post hadronic decays should have a M2 == 0 or (in the case of interaction
+										// with the vacuum) M1 == M2. Anthing else and we're reaching back into color charge
+
+										// Second check (primary muons from A, Z, W)
+										// Pythia hadronic decay never specifically invokes a W or Z
+										// so any encountered here must have come from the hard interaction.
+										// Pythia DOES produce A, which can split to muons, but not during decay (only during fragmentation)
+
+										// We break here because we've found the matriarch.
+										// If we break here, the mother should already be set.
+										break; // out of the do loop
+									}
+									else // Keep tracing back the lineage
+									{
+										possibleMatriarch = static_cast<Candidate*>(fAllParticles->At(possibleMatriarch->M1));
+									}
 								}
 
-								if( (not ((possibleMatriarch->M2 == 0) or (possibleMatriarch->M2 == possibleMatriarch->M1))) or
-									((absPossibleMatriarchPID >= 22) and (absPossibleMatriarchPID <= 24)))
+								// Store the matriarch's PID
+								(*itMuon)->TauTag = abs(matriarch->PID);
+
+								if(noMotherYet)
 								{
-									// First check (post hadronic)
-									// Post hadronic decays should have a M2 == 0 or (in the case of interaction
-									// with the vacuum) M1 == M2. Anthing else and we've reached back into color charge
-
-									// Second check (primary muons from A, Z, W)
-									// Pythia hadronic decay never specifically invokes a W or Z
-									// so any encountered here must have come from the hard interaction.
-									// Pythia DOES produce A which can split to muons.
-
-									// However, if we break here, the mother should already be set
-									break; // out of the do loop
+									// If I understand Pythia correctly, we should never reach here
+									// So let me know if we ever reach here, then default the mother to the matriarch
+									cout << "\n\nMotherFail\n\n" << endl;
+									(*itMuon)->BTag = (*itMuon)->TauTag;
 								}
-								else // Keep tracing back the lineage
-								{
-									possibleMatriarch = static_cast<Candidate*>(fAllParticles->At(possibleMatriarch->M1));
-								}
-							}while(possibleMatriarch);
 
-							// Store the matriarch's PID
-							(*itMuon)->TauTag = matriarch ? abs(matriarch->PID) : 0;
+								// Calculate the muon's true x to the matriarch
+								// Store in Tau[2] (repurposed N-sub-jettyness field)
+								const TVector3 matriarchP3 = (matriarch->Momentum).Vect();
+								const TVector3 muonP3 = ((*itMuon)->Momentum).Vect();
 
-							if(noMotherYet)
-							{
-								// If I understand Pythia correctly, we should never reach here
-								// So let me know if we ever reach here.
-								cout << "\n\nMotherFail\n\n" << endl;
-								(*itMuon)->BTag = (*itMuon)->TauTag;
+								(*itMuon)->Tau[2] = (matriarch->Momentum).E() *
+									(muonP3.Cross(matriarchP3)).Mag() /
+									((matriarch->Momentum).M() * muonP3.Dot(matriarchP3));
 							}
-
-							// Calculate the muon's true x to the matriarch
-							// Store in Tau[2] (repurposed N-sub-jettyness)
-							const TVector3 matriarchP3 = (matriarch->Momentum).Vect();
-							const TVector3 muonP3 = ((*itMuon)->Momentum).Vect();
-
-							(*itMuon)->Tau[2] = (matriarch->Momentum).E() *
-								(muonP3.Cross(matriarchP3)).Mag() /
-								((matriarch->Momentum).M() * muonP3.Dot(matriarchP3));
 						}
 						else
 						{
 							matriarch = 0; // Pile-up is assumed to be non-derferenceable, so it has no matriarch
-
 							// Use default values for BTag, TauTag, and Tau[2]
 						}
 
@@ -324,7 +338,7 @@ void HighPtBTagger::Process()
 				// Now we find the jet's core by reculstering its jet constituents
 				vector<fastjet::PseudoJet> reclusterInput;
 
-				// Add the good muons to the reclusterInput (CHECKED 14.04.2015)
+				// Add the good muons to the reclusterInput (CHECKED 23.06.2015)
 				{
 					// Give them a negative user_index ( user_index = index in goodMuons - goodMuons.size() )
 					// This makes them easy to find after the reclustering.
@@ -338,7 +352,7 @@ void HighPtBTagger::Process()
 					}
 				}
 
-				// Add jet constituents (all tracks towers passing pt cut) (CHECKED 14.04.2015)
+				// Add jet constituents (all tracks towers passing pt cut) (CHECKED 23.06.2015)
 				{
 					// Use all tracks, but only use towers/eFlowNeutrals (charge == 0) if they are above the relative pt threshold
 					// This is because the angular resolution of towers is much poorer, and we don't
@@ -360,39 +374,61 @@ void HighPtBTagger::Process()
 
 				// We'll be working with 2 core definitions. Keeping them in a vector allows us to re-use the code more easily
 				//    index 0: The Hardcore (the subjet with the highest pt)
-				//    index 1: The MinCore (the core which minimizes the reconstructed mass, when adding the muon, if different than the HardCore)
+				//    index 1: The BCore (the core which gets the reconstructed mass closest to fSubjetMassHypothesis)
 				std::vector<TLorentzVector> coreP4Vec;
 				// We'll also keep track of the minimum x we get for each core definition, for the final tag
 				std::vector<Double_t> coreMinX;
 
-				{// Scope of fastjet ClusterSequence
-					// Only consider subjets if they have a boost greater than fMinCoreMinBoost
-					// pt not_eq E, let's turn this off for now
-					// const Double_t minSubjetPt = fMinCoreMinBoost*fCoreMassHypothesis;
-					const Double_t minSubjetPt = 0.;
-
-					// Recluster the jet, to find subjets, then ensure the pt_subjet > 10 * coreMassHypothesis
+				// Scope of fastjet ClusterSequence (CHECKED 23.06.2015)
+				{
+					// Recluster the jet, to find core candidates
 					fastjet::ClusterSequence recluster(reclusterInput, *fCoreDefinition);
-					const std::vector<fastjet::PseudoJet> subJets = fastjet::sorted_by_pt(recluster.inclusive_jets(minSubjetPt));
+
+					// No minimum pT for reclustered candidates (for now)
+					const Double_t minCoreCandidatePt = 0.;
+					// Get the core candidates (not sorted by pT until we remove muons)
+					std::vector<fastjet::PseudoJet> coreCandidates = recluster.inclusive_jets(minCoreCandidatePt);
 
 					// Make sure at least one subjet passed the cut
-					if(not subJets.empty())
+					if(not coreCandidates.empty())
 					{
-						// Keep pseudojets in a vector that parallels coreP4Vec
+						// Keep pseudojets corresponding to cores in a vector that parallels coreP4Vec
 						std::vector<fastjet::PseudoJet> coreVec;
 
-						// The hardCore is the core with the highest pt
-						coreVec.push_back(subJets.front());
-						coreMinX.push_back(9e9);
-
-						// Get fastjets internal jets (because it can't alter our input jets,
-						// so they have no internal information, which we'll need to use).
+						// Get fastjets internal jets (because it only has const access to our input jets,
+						// so they have no internal clustering information, which we'll need to use).
 						// The documentation does not specify that the input jets are the first
 						// members of list returned by jets(), so we'll have to assume that
 						// this is the case (though we will check this assumption later)
 						const std::vector<fastjet::PseudoJet>& internalJets = recluster.jets();
 
-						// Find the minCore (WARNING, only the hardest muon is used to define the MinCore) (CHECKED 14.04.2015)
+						// Remove all good muons from the core candidates, then sort by pt (CHECKED 23.06.2015)
+						{
+							for(unsigned int iMu = 0; iMu < goodMuons.size(); ++iMu)
+							{
+								const fastjet::PseudoJet& muon = internalJets[iMu];
+								if(muon.user_index() >= 0)
+									throw runtime_error("HighPtBTagger: Muon ID Fail!");
+
+								for(auto itCoreCandidate = coreCandidates.begin(); itCoreCandidate not_eq coreCandidates.end(); ++itCoreCandidate)
+								{
+									if(muon.is_inside(*itCoreCandidate))
+									{
+										*itCoreCandidate -= muon;
+										break; // out of inner loop - the muon can only be in one candidate at a time
+									}
+								}
+							}
+
+							coreCandidates = fastjet::sorted_by_pt(coreCandidates);
+						}
+
+						// The hardCore is the core with the highest pt
+						coreVec.push_back(coreCandidates.front());
+						coreMinX.push_back(9e9);
+
+						// Find the BCore (CHECKED 23.06.2015)
+						// (WARNING, only the hardest muon is used to define the BCore)
 						{
 							// Unfortunately, we can't just add the muon to the core and calculate
 							// the mass, because the core currently has the wrong mass (from the granularity of
@@ -400,9 +436,10 @@ void HighPtBTagger::Process()
 							// the 4-momentum of every subjet with a new mass.
 
 							// However, from a rather trivial calculation, one can show that, if the mass of
-							// the subjet is constrained to CoreMassHypothesis, the M**2 after adding the muon twice is:
+							// the subjet is constrained to CoreMassHypothesis, the M**2 after adding the muon
+							// and neutrino (where p_nu = p_mu), and ignoring the muon mass:
 							//
-							// M**2 = CoreMassHypothesis**2 + 4*Emu*Esub*(g + y)/(1 + (y + sqrt(1 - ((g-y) + g*y))))
+							// M**2 = CoreMassHypothesis**2 + 4*Emu*Esub*(g + y)/(1 + y + sqrt(1 - ((g-y) + g*y)))
 							//
 							// where (g = (CoreMassHypothesis/Esub)**2) and (y = tan(theta)**2 = (p3>_mu x p3>_sub)**2 / (p3>_mu.p3>_sub)**2
 							//
@@ -415,79 +452,47 @@ void HighPtBTagger::Process()
 							if(hardestMuon.user_index() not_eq -1)
 								throw runtime_error("HighPtBTagger: Can't access original muon from vector returned by ClusterSequence::jets()!");
 
-							// The hardest muon can only be inside one sub-jet, so we can
-							// stop looking to see if it's inside subjets after it's
-							// already found and subtracted from one of them
-							bool hardestMuonUnsubtracted = true;
-
 							// By minimizing the squared mass, we'll minimize the mass
 							Double_t minDeltaMass = 9e9;
-							unsigned int minCoreIndex = 0;
+							auto bCore = coreCandidates.begin();
 
-							for(unsigned int iSub = 0; iSub < subJets.size(); ++iSub)
+							for(auto itCoreCandidate = coreCandidates.begin(); itCoreCandidate not_eq coreCandidates.end(); ++itCoreCandidate)
 							{
-								// Make a copy of the subjet, so we can operate on its 4-vector
-								fastjet::PseudoJet subjet = subJets[iSub];
+								const Double_t g = Squared(fCoreMassHypothesis / itCoreCandidate->E());
+								// Make sure we still have sufficient boost after muon subtraction
+								if(g*fBCoreMinBoost2 > 1.)
+									break; // Since we're sorted by pt, the next one won't be valid either
 
-								// If the muon is already inside the subjet, subtract it's momentum
-								if(hardestMuonUnsubtracted and hardestMuon.is_inside(subjet))
-								{
-									subjet -= hardestMuon;
-									hardestMuonUnsubtracted = false;
-								}
+								const Double_t y = Tan2(*itCoreCandidate, hardestMuon);
 
-								const Double_t g = Squared(fCoreMassHypothesis / subjet.E());
-								// Make sure we still have sufficient boost after muon subtraction;
-								if(g*fMinCoreMinBoost2 > 1.)
-									continue;
-
-								const Double_t y = Tan2(subjet, hardestMuon);
-
-								// Instead of the minCore, find the core with mass closest to target
-								const Double_t deltaMass = abs(sqrt(fCoreMassHypothesis2 + 4. * hardestMuon.E() * subjet.E() * (g + y) / (1. + (y + sqrt(1. - ((g - y) + g*y))))) - fSubjetMassHypothesis);
+								// The BCore has the mass closest to fSubjetMassHypothesis
+								const Double_t deltaMass = abs(sqrt(fCoreMassHypothesis2 + 4. * hardestMuon.E() * itCoreCandidate->E() * (g + y) / (1. + y + sqrt(1. - ((g - y) + g*y)))) - fSubjetMassHypothesis);
 
 								if(deltaMass < minDeltaMass)
 								{
 									minDeltaMass = deltaMass;
-									minCoreIndex = iSub;
+									bCore = itCoreCandidate;
 								}
 							}
 
-							// Check if the minCore is different than the hardCore
-							if(minCoreIndex > 0)
+							// Check if the BCore is different than the hardCore
+							if(bCore not_eq coreCandidates.begin())
 							{
-								coreVec.push_back(subJets[minCoreIndex]);
+								coreVec.push_back(*bCore);
 								coreMinX.push_back(9e9);
 							}
 						}
-						// If the minCore is the hardcore, coreVec will only have 1 member
 
-						// Subtract muons from the cores (CHECKED 14.04.2015)
-						{
-							for(unsigned int iMu = 0; iMu < goodMuons.size(); ++iMu)
-							{
-								const fastjet::PseudoJet& muon = internalJets[iMu];
-								if(muon.user_index() >= 0)
-									throw runtime_error("HighPtBTagger: Muon ID Fail!");
-
-								for(std::vector<fastjet::PseudoJet>::iterator itCore = coreVec.begin(); itCore not_eq coreVec.end(); ++itCore)
-								{
-									if(muon.is_inside(*itCore))
-									{
-										*itCore -= muon;
-										break; // out of inner loop - the muon can only be in one core at a time
-									}
-								}
-							}
-						}
+						// If the BCore is the HardCore, coreVec will only have 1 member
+						const bool bCoreIsHardCore = (coreVec.size() == 1);
 
 						// From now on, we will keep the original PseudoJet cores around (i.e. coreVec)
 						// in case we are interested in constituents. However, all 4-vector math
 						// will now be handled by TLorentzVector, since it has more/better math.
 
-						// Fix core mass to fCoreMassHypothesis (CHECKED 14.04.2015)
+						// Fix core mass to fCoreMassHypothesis (CHECKED 23.06.2015)
 						{
-							for(std::vector<fastjet::PseudoJet>::iterator itCore = coreVec.begin(); itCore not_eq coreVec.end(); ++itCore)
+							for(auto itCore = coreVec.begin(); itCore not_eq coreVec.end(); ++itCore)
 							{
 								// The current mass depends more on the granularity of the CAL than anything else
 								// To fix the mass, We need to scale the momentum of the core (but not the energy)
@@ -495,8 +500,6 @@ void HighPtBTagger::Process()
 								coreP4Vec.emplace_back(momentumScale*itCore->px(), momentumScale*itCore->py(), momentumScale*itCore->pz(), itCore->E()); //xyzt
 							}
 						}
-
-						const bool minCoreIsHardCore = (coreVec.size() == 1);
 
 						// Iterate through the cores and analyze
 						for(unsigned int iCore = 0; iCore < coreP4Vec.size(); ++iCore)
@@ -531,7 +534,7 @@ void HighPtBTagger::Process()
 										core += muonP4;
 										// Store the change in angle
 										muon->FracPt[iCore] = AccurateAngle(matriarchP3, core.Vect()) - originalAngle;
-										if(minCoreIsHardCore)
+										if(bCoreIsHardCore)
 											muon->FracPt[1] = muon->FracPt[0];
 									}
 								}
@@ -545,7 +548,7 @@ void HighPtBTagger::Process()
 
 								muon->Tau[iCore] = xCore;
 								coreMinX[iCore] = std::min(coreMinX[iCore], xCore);
-								if(minCoreIsHardCore)
+								if(bCoreIsHardCore)
 									muon->Tau[1] = xCore;
 							}// End loop over muons
 						}// End loop over cores
@@ -555,7 +558,7 @@ void HighPtBTagger::Process()
 				const Double_t	jetPt = (jet->Momentum).Pt();
 
 				// Re-check pt now that we've estimated neutrinos
-				if(jetPt > fMinJetPt)
+				if(jetPt >= fMinJetPt)
 				{
 					for(unsigned int iCore = 0; iCore < coreP4Vec.size(); ++iCore)
 					{
@@ -563,14 +566,14 @@ void HighPtBTagger::Process()
 						jet->Tau[iCore] = coreMinX[iCore]; // Store core's smallest x
 					}//End loop through cores
 
-					// If the MinCore is the HardCore, copy its values
-					if (coreP4Vec.size() == 1)
+					// If the BCore is the HardCore, copy its values
+					if(coreP4Vec.size() == 1)
 					{
 						jet->FracPt[1] = jet->FracPt[0];
 						jet->Tau[1] = jet->Tau[0];
 					}
 
-					// Tag based on the MinCore (make a flag maybe)
+					// Final tag based on the BCore (make a flag maybe)
 					const unsigned int taggingCore = 1;
 
 					if(jet->FracPt[taggingCore] >= fCorePtRatioMin)
