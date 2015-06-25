@@ -29,7 +29,7 @@ const Double_t METERS_to_mm = 1E3;
 
 
 // This function assumes that a > b > c > 0. If these conditions fail, then
-// so will the result.
+// the result will not be as accurate as possible
 Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Double_t c)
 {
 	// EXTRA PARENTHESIS ARE DELIBERATE, DO NOT REMOVE
@@ -74,7 +74,7 @@ void AllParticlePropagator::Init()
 
 	fHalfLength = GetDouble("HalfLength_m", 3.0) * METERS_to_mm; // Default = 3m
 
-	fBz = GetDouble("Bz_Tesla", 0.0); // Default = 0 Tesla (will cause fatal exception)
+	fBz = GetDouble("Bz_Tesla", 0.0); // Default = 0 Tesla
 
 	fMinTrackLength = GetDouble("MinTrackLengthRatio", .7) * fRadius; // Default = 70% of radius (~high purity tracks, minimal double-counting of energy)
 
@@ -111,6 +111,7 @@ void AllParticlePropagator::Init()
 
 void AllParticlePropagator::Finish()
 {
+	// Delete all the Pileup Candidates
 	delete pileupFactory;
 }
 
@@ -138,6 +139,7 @@ void AllParticlePropagator::Process()
 		delete itInput;
 	}
 
+	// Add in a random number of pileup events
 	FillPileup();
 }
 
@@ -165,10 +167,10 @@ void AllParticlePropagator::NullifyDaughters(Candidate* const mother, const bool
 {
 	if(mother)
 	{
-		if(nullifyThisParticle) // We don't want to alter the mother that initiates the recursion
+		if(nullifyThisParticle) // We don't want to alter the mother that became final state
 		{
 			mother->Status = 0; // This particle is null; the decay never happened
-			mother->TrackLength = ABSURDLY_LARGE; // Make it appear that the particle was propagated.
+			mother->TrackLength = 0.; // Make it appear that the particle was propagated.
 		}
 
 		// Now nullify any of it's daughters
@@ -257,10 +259,10 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 		// This is supposed to happen; see the long comment in Process().
 	}
 
-	// Whenever there is an active rotation, all descendents of this particle will be
-	// propagated recursively. This can create a lot of nested calls to Propagate.
-	// In order to keep memory space tidy, we'll keep all temporary/unneccessary
-	// variables in a scope that will close before the recursive call.
+	// Whenever the particle is part of an active decay chain (i.e. fragmentation over).
+	// all descendents of this particle will be propagated recursively. This can create
+	// a lot of nested calls to Propagate. In order to keep memory space tidy, we'll keep
+	// all temporary/unneccessary variables in a scope that will close before the recursive call.
 
 	// If this particle rotates, then it will need to create a NEW rotation to use
 	// on its daughters. Once all the daughters are propagated, this memory will
@@ -297,7 +299,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				// For more information on this error, see #5 in the class description in the header file
 			}
 
-			// candidate::Creation radius is stored as a Float_t; check, then store, to not lose precision.
+			// candidate::Creation radius is stored as a Float_t; check for sanity, then store, otherwise we could have precision conversion problems
 			candidate->CreationRadius = creationRadius;
 		}
 
@@ -377,10 +379,11 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
 
 				// PropagateHelicly() will propagate the particle. It has 4 returns. Its official
-				// return indicates whether "rotation" (passed be reference) was changed. Of
-				// course all charged particles rotate, but rotation only needs to change when
+				// return indicates whether "rotation" (passed be reference) had an angle added
+				// to it. Of  course all charged particles rotate, but rotation only needs to change when
 				// the particle decays. If it strikes the cylinder, its daughters don't require
-				// rotation. The propagation solutions (ctProp and rFinal) are also passed by reference.
+				// rotation (so don't bother adding its rotation).
+				// The propagation solutions (ctProp and rFinal) are also passed by reference.
 				newRotation = PropagateHelicly(candidate, decays,
 					                            r0, z0,
 					                            r0Beta, z0Beta,
@@ -812,7 +815,7 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 
 		if(pileupStoreSize == 0)
 			throw runtime_error("Can't read Pythia EventRecord from <" + pileupFileName + "> or contains no events!\n");
-		else if(Double_t(pileupStoreSize) < 3. * fMeanPileup)
+		else if(Double_t(pileupStoreSize) < 10. * fMeanPileup)
 			throw runtime_error("Pileup file <" + pileupFileName + "> does not contain enough events for supplied mean!\n Contains = " + to_string((long long int)pileupStoreSize) + ", Mean = " + to_string((long double)fMeanPileup) + "\n");
 
 		// Get the TClonesArray for the pileup particles
@@ -879,7 +882,7 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 				delete itEventRecord;
 			}
 
-			// Propagate all particles
+			// Propagate all Pileup particles
 			{
 				// Clear the output arrays
 				for(std::vector<TObjArray*>::iterator itArray = pileupArraysToStore.begin(); itArray not_eq pileupArraysToStore.end(); ++itArray)
@@ -916,7 +919,10 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 
 					while((candidate = static_cast<Candidate*>(itCandidate->Next())))
 					{
+						// Map from the temporary to permanent Candidate
 						Candidate*& permanentCandidate = permanentPileup[candidate];
+
+						// Check to see if we've already instantiated a permanent version of this particle
 						if(permanentCandidate == 0)
 						{
 							permanentCandidate = static_cast<Candidate*>(pileupFactory->NewEntry());
@@ -928,7 +934,7 @@ void AllParticlePropagator::PropagateAndStorePileup(const std::string& pileupFil
 							permanentCandidate->D1 = 0;
 							permanentCandidate->D2 = 0;
 
-							permanentCandidate->SetFactory(factory); // This is done so that the Delphes factory is in charge of Candidate::Clone() (e.g. MomentumSmearing will Clone pileup)
+							permanentCandidate->SetFactory(factory); // This is done so that the official Delphes factory is in charge of Candidate::Clone() (e.g. MomentumSmearing will Clone pileup)
 							TProcessID::AssignID(permanentCandidate);
 						}
 
@@ -961,23 +967,31 @@ void AllParticlePropagator::FillPileup()
 
 	// Fill pileupIndices
 	{
-		const UInt_t numPileup = gRandom->Poisson(fMeanPileup);
+		UInt_t numPileup = gRandom->Poisson(fMeanPileup);
 
 		const UInt_t sizePileupStore = pileupStore.size();
-		if(numPileup > sizePileupStore)
-			throw runtime_error("AllParticlePropagator::FillPileup: random Poisson (" + to_string((long long int) numPileup) + ")larger than pileup store!");
+		while(numPileup > sizePileupStore)
+		{
+			// We already checked that the pileupStore was more than 10 times as large as the mean
+			// In the rare case we get an insanely large number, simply re-draw.
+			numPileup = gRandom->Poisson(fMeanPileup);
+		}
 
-		// Fill pileup WITHOUT replacement by recording indices already selected
-		std::vector<bool> alreadySelected(sizePileupStore, false);
+		// Fill pileup WITHOUT replacement (by recording indices already selected)
+		// std::vector<bool> is probably not faster in this case, since it's too space efficient.
+		// To use std::vector<char>, 1 == free and 0 == used
+		std::vector<char> freeIndex(sizePileupStore, 1);
 		pileupIndices.reserve(numPileup);
 
 		while(pileupIndices.size() < numPileup)
 		{
-			UInt_t indexCandidate = gRandom->Integer(sizePileupStore);
-			if(not alreadySelected[indexCandidate])
+			UInt_t possibleIndex = gRandom->Integer(sizePileupStore);
+
+			char& isFree = freeIndex[possibleIndex];
+			if(isFree == 1)
 			{
-				alreadySelected[indexCandidate] = true;
-				pileupIndices.push_back(indexCandidate);
+				isFree = 0;
+				pileupIndices.push_back(possibleIndex);
 			}
 		}
 	}
@@ -1132,8 +1146,8 @@ VecXY VecXY::operator / (const Double_t scalar) const
 
 Double_t VecXY::Norm() const
 {
-	// The original is more accurate unless we're dealing with x or y so
-	// large that the result will under/overflow. In this application, unlikely.
+	// The naive form is more accurate unless we're dealing with x or y so
+	// large that the result will under/overflow. In this application ... unlikely.
 	return sqrt(x*x + y*y);
 	//return hypot(x, y);
 }
@@ -1178,7 +1192,7 @@ RotationXY::RotationXY(const Double_t angle):
 //------------------------------------------------------------------------------
 
 RotationXY::RotationXY(const Double_t cos_in, const Double_t sin_in):
-	cosine(cos_in), sine(sin_in) {} // No check for unitarity
+	cosine(cos_in), sine(sin_in) {} // No check for unitarity, trust the user
 
 //------------------------------------------------------------------------------
 
@@ -1195,13 +1209,35 @@ RotationXY& RotationXY::Add(RotationXY const* const otherRotation)
 {
 	if(otherRotation)
 	{
-		const Double_t
-			cosine0 = cosine,
-			sine0 = sine;
+		{
+			const Double_t
+				cosine0 = cosine,
+				sine0 = sine;
 
-		// Add Angles
-		cosine = cosine0 * otherRotation->cosine  - sine0 * otherRotation->sine;
-		sine =   cosine0 * otherRotation->sine    + sine0 * otherRotation->cosine;
+			// Add Angles
+			// The naive form of angular addition for cosine is ripe for catastrophic cancellation
+			// when the new cosine term is approximately zero.
+			/// cosine = cosine0 * otherRotation->cosine  - sine0 * otherRotation->sine;
+
+			// This alternate form gives the same result with only benign cancellation
+			// (and only 4 additional additions and a final exponent shift)
+			cosine = 0.5*((cosine0 + sine0)*(otherRotation->cosine - otherRotation->sine) +
+							  (cosine0 - sine0)*(otherRotation->cosine + otherRotation->sine));
+			sine = cosine0 * otherRotation->sine + sine0 * otherRotation->cosine;
+		}
+
+		// Ensure unitarity (multiplying by reciprocal would be faster, but less accurate).
+		const Double_t normalization = sqrt(cosine*cosine + sine*sine);
+
+		// However, we should be seeing errors of O(epsilon) (i.e. 2e-16), so check for absurd errors
+		if(abs(normalization-1.) > 1e-14)
+		{
+			printf("\n\nsin: %.16e\ncos: %.16e\n(norm-1): %.16e\n\n", sine, cosine, normalization-1.);
+			throw runtime_error("(RotationXY::Add): normalization too high, numerical error!");
+		}
+
+		cosine /= normalization;
+		sine /= normalization;
 	}
 
 	return *this;
