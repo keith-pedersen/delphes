@@ -36,8 +36,13 @@ Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Do
 	return sqrt((a + (b + c))*(c - (a - b))*(c + (a - b))*(a + (b - c)))/4.;
 	// See "Mathematics Written in Sand" by W. Kahan, bottom of page 10
 	// http://www.cs.berkeley.edu/~wkahan/MathSand.pdf#page=10
+
+	// My alternate form, with no double subtraction. Tests to be only a teensy
+	// bit better (with limited data set), so not really worth the risk.
+	//return sqrt((a + (b + c))*(a + (b - c))*(c + (b - a))*(a + (c - b)))/4.;
 }
 
+inline Double_t Squared(const Double_t arg) {return arg*arg;}
 
 // This code deliberately eschews TMath
 
@@ -271,35 +276,39 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 		// allows for the propagation of MASSLESS final state particles, whose cTau = 0.
 		const Double_t cTau = ((candidate->Status == 1) ? ABSURDLY_LARGE : candidate->CTau);  //[mm]
 
-		if(cTau <= 0.) // The particle decayed instantaneously (or has an invalid cTau)
+		TLorentzVector& position = candidate->Position; // creation vertex
+		// Store the particle's creation vertex in its Area field (see #8 in class descrption in header file)
+		(candidate->Area) = position;
+		const Double_t
+			R02 = Squared(position.X()) + Squared(position.Y()),
+			z0 = position.Z();
+
 		{
-			candidate->TrackLength = 0.; // This indicates that the particle has been "processed
+			const Double_t creationRadius = sqrt(R02);
 
-			const TLorentzVector& position = candidate->Position;
-			candidate->Area = position; // It didn't go anywhere, but give it a valid initial position
-
-			const Double_t creationRadius = sqrt(position.X()*position.X() +  position.Y()*position.Y());
-
-			// Check that the particle was created inside the cylinder (sanity check)
-			if((creationRadius >= fRadius)	or (abs(position.Z()) >= fHalfLength))
+			// Check that the particle was created inside the cylinder
+			if((creationRadius >= fRadius) or (abs(z0) >= fHalfLength))
 			{
 				stringstream message;
-				message << "(AllParticlePropagator::Propagate1): Particle created outside the cylinder ";
-				message << "( " << creationRadius << " , " << position.Z() << " )!\n";
+				message << "(AllParticlePropagator::Propagate): Particle (" << candidate->PID << ") created outside the cylinder ";
+				message << "( " << creationRadius << " , " << z0 << " )!\n";
 				message << "Did you include the entire decay chain? Did you re-index?\n";
 				throw runtime_error(message.str());
 				// For more information on this error, see #5 in the class description in the header file
 			}
 
+			// candidate::Creation radius is stored as a Float_t; check, then store, to not lose precision.
 			candidate->CreationRadius = creationRadius;
+		}
+
+		if(cTau <= 0.) // The particle decayed instantaneously (or has an invalid stored cTau)
+		{
+			candidate->TrackLength = 0.; // This indicates that the particle has been "processed
+			// Nothing else to do
 		}
 		else
 		{
 			const TLorentzVector& momentum = candidate->Momentum; // 4-momentum
-			TLorentzVector& position = candidate->Position; // creation vertex
-
-			// Store the particle's creation vertex in its Area field (see #8 in class descrption in header file)
-			(candidate->Area) = position;
 
 			// We'll be using cylindrical coordinates (r, z) for obvious reasons
 			// Assume 4-position is stored in [mm]
@@ -308,51 +317,29 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			const VecXY r0(position.X(), position.Y());
 			const Double_t
 				energy = momentum.E(),
-				R02 = r0.Norm2(),
-				z0 = position.Z(),
 				q = candidate->Charge;
 
-			{
-				const Double_t creationRadius = sqrt(R02);
-
-				// Check that the particle was created inside the cylinder
-				if((creationRadius >= fRadius) or (abs(z0) >= fHalfLength))
-				{
-					stringstream message;
-					message << "(AllParticlePropagator::Propagate2): Particle (" << candidate->PID << ") created outside the cylinder ";
-					message << "( " << creationRadius << " , " << z0 << " )!\n";
-					message << "Did you include the entire decay chain? Did you re-index?\n";
-					throw runtime_error(message.str());
-					// For more information on this error, see #5 in the class description in the header file
-				}
-
-				candidate->CreationRadius = creationRadius;
-			}
-
-			// This maximum representable non-infinite gamma is gammaMax = 1/sqrt(MachineEpsilon).
-			// For double precision, MachineEpsilon ~= 1.1E-16, so gammaMax = 9.5e7.
-			// Thus, until we start dealing with gamma > 10^7, we don't have to
-			// worry about beta losing precision (and also not unless the particle
-			// is completely parallel to one of the axes). This works out to
-			// a {5 TeV e+} or a {1.4 PeV pi+})
+			// It's easier to work with beta than momentum
 			const VecXY r0Beta( momentum.Px()/energy, momentum.Py()/energy );
 			const Double_t R0Beta2 = r0Beta.Norm2(); // Transverse beta (used throughout instead of pT)
 			const Double_t z0Beta = momentum.Pz()/energy;
 
-			// The next 3 variables will be set by the propagating routine, when the solutions are found.
+			// The next 3 variables will be altered by the propagating routine, when the solutions are found.
 
-			// This bool lets us know whether or not the particle decays. Currently, we will assume it does.
+			// "decays" lets us know whether or not the particle decays. Currently, we will assume it does.
 			bool decays = true;
 
 			// The total lab propagation time; currently, that's the time until decay (cTau * gamma).
-			// Use the absolute value JUST IN CASE the mass (or CTau) is accidently -0.
-			Double_t ctProp = abs(cTau * (energy / candidate->Mass));
 			// For massless particles, this will be (inf). That's OK, because we will find the shortest time.
+			// Use the absolute value JUST IN CASE the mass (or CTau) is accidently -0, since
+			// we will be altering ctProp only if we find a shorter/smaller time
+			Double_t ctProp = abs(cTau * (energy / candidate->Mass));
 
 			// The particle's final position; default to initial position.
 			VecXY rFinal(r0);
 
-			{// Figure out how long till the particle hits the endcap:
+			// Figure out how long till the particle hits the endcap.
+			{
 				const Double_t ctEndcap = (copysign(fHalfLength, z0Beta) - z0) / z0Beta;
 				// copysign() ensures that, if (z0Beta = (+/-)0.), we'll get (ctEndcap = inf)
 				// (IFF the particle is inside the cylinder, which we already verified)
@@ -384,15 +371,15 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				//
 				//    deltaPhi == omega*t == (omega/c)*ct
 				//
-				//    omega / c == -q fBz /(gamma m c) == -q fBz c / energy    [rad/m]
-				//    omega / c == -q fBz c / energy / METERS_to_mm           [rad/mm]
+				//    omega / c == -q fBz /(gamma m c) == -q fBz / (energy / c)  [rad/m]
+				//    omega / c == -q fBz c / energy / METERS_to_mm              [rad/mm]
 				//
 				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
 
 				// PropagateHelicly() will propagate the particle. It has 4 returns. Its official
 				// return indicates whether "rotation" (passed be reference) was changed. Of
 				// course all charged particles rotate, but rotation only needs to change when
-				// the particle decays. If it strikes the cylinder, its daughters doesn't require
+				// the particle decays. If it strikes the cylinder, its daughters don't require
 				// rotation. The propagation solutions (ctProp and rFinal) are also passed by reference.
 				newRotation = PropagateHelicly(candidate, decays,
 					                            r0, z0,
@@ -499,7 +486,6 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 		}//End propagation
 	}//End temporary variable scope
 
-	//if(rotation) // If we have an active rotation, Propagate all daughters immedietely
 	// Previously, we would only propagate recursively when there was an active rotation.
 	// BUT, I started storing the pythia particles with binary32, while
 	// propagating from the primary vertex with binary64. This means that
@@ -590,7 +576,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 
 	// If the particle isn't a looper, we'll need to calcualte it's barrel exit solution.
 	// Let's get some calculations started now, that we'll need to use later.
-	// Hopefully the compiler can get these in the pipe, to reduce latency if they are needed.
+	// Hopefully the compiler can get these in the pipe, to reduce latency when they are needed.
 	const bool notLooper = (RBeam_hx + R_hx >= fRadius);
 	std::vector<Double_t> smallToLargeTriangleSides;
 
@@ -598,13 +584,11 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 	// coordinate system (hxPr). In this system, the helix's perigree (close approach) to
 	// the beamline lies at {R_helix, 0}, with apogee at {-R_helix, 0}. We can parameterize these positions
 	// using (phi), with (phi == 0) corresponding to perigree and (phi == sign(omega)*pi) corresponding
-	// to agpogee. This coordinate system (a 180 degree flip) keeps phi0 and
-	// deltaPhiBarrel small for very enegetic particles, which need the most precision
-	// (hence we don't need to do any angular subtraction, and subject our angle to epsilon error).
+	// to agpogee.
 
 	Double_t phi0; // The initial anglular position (in hxPr) will be set in a moment
 
-	// Finish the notLooper calculations
+	// Prepare for the edge intercept calculation
 	if(notLooper)
 	{
 		// Sort the sides of the triangle (to be explained later)
@@ -613,18 +597,29 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 	}
 
 	{// Find the coordinates of close approach between the track circle and the beamline.
-		{
+		{// {x,y}
 			// In the xy plane, the point of close approach lies on the line drawn through
-			// the origin and helix center, either in front of behind the beamline.
+			// the origin and helix center, either in front of behind the beamline. Thus,
+			// the distance is determined by the difference in radii from the pertinent circles.
 			Double_t RCloseApproach = R_hx - RBeam_hx;
-			candidate->Dxy = copysign(RCloseApproach, r0.Cross(r0Beta));
-			// By convention, the impact parameter has the same sign as the angular momentum
+			// The sign is currently backwards (negative if CloseAppraoch is between beam
+			// and helix center), this is for good reason (we will correct it in just a moment).
+			candidate->Dxy = RCloseApproach;
 
-			// Project out the signed x and y components of the close approach position
-			// No trig required, use the information we already have
+			// Project out the signed x and y components of the close approach position.
+			// No trig required, rBeam_hx is already parallel to the line connecting the
+			// beam line and helix center. But because rBeam_hx points from helix center to
+			// the beam-line, we need a sign flip; this was already built into RCloseApproach.
+
+			// Scale RCloseApproach to scale the components
 			RCloseApproach /= RBeam_hx;
 			candidate->Xd = rBeam_hx.x * RCloseApproach;
 			candidate->Yd = rBeam_hx.y * RCloseApproach;
+
+			// By convention, the impact parameter has the same sign as the scalar product between
+			// the close approach vector and jet centroid. Since we haven't built any jets yet, we can
+			// use the momentum of the particle.
+			candidate->Dxy = copysign(candidate->Dxy, (r0Beta.x*candidate->Xd + r0Beta.y*candidate->Yd));
 		}
 
 		{
@@ -634,36 +629,33 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			// (phi0) can be found from r0>_hx and rBeam>_hx.
 			//
 			// The most accurate way to find the (interior) angle between two vectors is NOT:
+			//
 			//     acos(a>.b>/sqrt(a>.a> * b>.b>))
-			// but (per my personal research):
 			//
-			//     atan2(sqrt(tan(a>, b>)^2), sign(a>.b>)
+			// W. Kahan suggests a form in "How Futile are Mindless Assessments..." on the
+			// top of p. 47, but (per my personal research) the best form is:
 			//
-			// This form may seem like overkill, but the acos form loses precision
+			//     atan2(sqrt(|a> x b>|^2), a>.b>)
+			//
+			// This form may seem like slight overkill, but the acos form loses precision
 			// for exactly the particles we need extra precision for: super
-			// energetic particles that don't bend very much, and thus start
-			// very close to apogee. Such particles really need to show up
-			// in the correct Calorimeter cell. Plus, the acos can sometimes
-			// send a cos(x) > 1 for very parallel vectors (normalization error).
-			// This producess a NaN from acos.
+			// energetic particles that don't bend very much, with small angles between
+			// r0_hx> and rBeam_hx>. Such particles really need to show up
+			// in the correct Calorimeter cell. Plus, the acos form can sometimes
+			// send cos(x) > 1 for very parallel vectors (normalization error),
+			// which producess a NaN from acos.
 			//
-			// We'll still need to find the sign of phi0 (which doesn't depend
-			// on the charge ... some sketches may be required to understand why):
+			// The sign of phi_0 depends on which side of perigree the particle
+			// starts on (positive or negative deltaPhi, where positive is RH rotation)
 			//
 			//    sign(phi0) = sign(rBeam>_hx x r0>_hx)
+			//
+			// With atan2(y, x), the sign of x determines the magnitude of the angle,
+			// while the sign of y determines the sign of the angle. Hence, we will
+			// give the y argument the sign of the vector product. BUT, since we are working with
+			// 2D vectors, the vector product is a scalar, so we can feed it in directly
 
-			const Double_t
-				cross0 = rBeam_hx.Cross(r0_hx),
-				dot0 = rBeam_hx.Dot(r0_hx);
-
-			phi0 = copysign(atan2(sqrt((cross0*cross0)/(dot0*dot0)), copysign(1., dot0)),
-						cross0);
-			// Here copysign is safe because if rBeam_hx.Cross(r0_hx) = +/- 0,
-			// then either the particle is at perigree or apogee. If it's at
-			// perigree, then phi = +/-0 (and the sign of zero shouldn't matter).
-			// If it's at apogee, then it's a looper, so phi_0 is only used for
-			// Zd (which now is a meaningless number, since the particle is at
-			// apogee, so close approach is equally in front and behind).
+			phi0 = atan2(rBeam_hx.Cross(r0_hx), rBeam_hx.Dot(r0_hx));
 
 			// To find z at close approach, subtract the z-distance travelled
 			// since (or until) close approach.
@@ -690,8 +682,8 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		// we can use a very simple thought experiment. Imagine a positively charged
 		// particle moving in its LH helix (omega < 0). Since it is constantly moving
 		// to smaller phi. the only way that (+epsilon) is its first encounter
-		// with the barrel is if phi0 starts BETWEEN the two solutions. But since
-		// (RCenter + R_helix >= fRadius), this would also mean that the particle started
+		// with the barrel is if phi0 > +epsilon. But, because the way we define
+		// the hx_pr system, this would also mean that the particle started
 		// OUTSIDE the barrel (which we already verified is false). Since the opposite
 		// argument works for the negatively charged particle, we find:
 		//
@@ -703,30 +695,44 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		//        sin(epsilon) = sign(Omega)*2*AreaOfTriangle/(R_hx * RBeam_hx)
 		//
 		// Thus, to find epsilon, we can use atan2.
+
 		const Double_t denom = R_hx * RBeam_hx;
+
+		// The Kahan Triangle area requires pre-sorted sides (a > b > c), which we already did
 		const Double_t sinEpsilon =
 			copysign(2. * KahanTriangleAreaPreSorted(smallToLargeTriangleSides[2], smallToLargeTriangleSides[1], smallToLargeTriangleSides[0]) / denom,
 				omegaOverC);
-		// Assume RBeam2_hx > R2_hx > fRadius2
-		const Double_t cosEpsilon = (RBeam2_hx + (R2_hx - fRadius2))/(2.*denom);
 
+		// For the cos, we should always subtract the two terms which are closest
+		// const Double_t cosEpsilon = (RBeam2_hx + R2_hx - fRadius2)/(2.*denom);
+		// This reduces rounding errors by about 3%
+		//
+		// For (a + b - c), if |a-c| < |b-c|, then we want to use (b + (a - c)) (and vice versa)
+		// Using (a-c)**2 < (b-c)**2, reduces to (a < b) ? (a + b > 2c) : (a + b < 2c)
+		const Double_t cosEpsilon = ((RBeam2_hx < R2_hx) ?
+			((RBeam2_hx + R2_hx > 2.*fRadius2) ? (R2_hx + (RBeam2_hx - fRadius2)) : (RBeam2_hx + (R2_hx - fRadius2))) :
+			((RBeam2_hx + R2_hx < 2.*fRadius2) ? (R2_hx + (RBeam2_hx - fRadius2)) : (RBeam2_hx + (R2_hx - fRadius2))))/(2.*denom);
+
+		// Rounding errors will occasionally cause some non-perfect normalization. We can
+		// adjust for this easily.
+		const Double_t normalization = sqrt(sinEpsilon*sinEpsilon + cosEpsilon*cosEpsilon);
+
+		// However, we should be seeing errors of O(epsilon) (i.e. 2e-16), so check for absurd errors
+		if(abs(normalization-1.) > 1e-14)
+		{
+			printf("\n\nsin: %.16e\ncos: %.16e\n(norm-1): %.16e\n\n", sinEpsilon, cosEpsilon, normalization-1.);
+			throw runtime_error("(AllParticlePropagator::PropagateHelicly): normalization too high, numerical error!");
+		}
+
+		// No need to correct for normalization before atan2, it is automatically done
+		// (i.e. only normalize when the particle strikes the barrel)
 		const Double_t ctBarrel = (atan2(sinEpsilon, cosEpsilon) - phi0) / omegaOverC;
-
-		if(abs(cosEpsilon) > 1.)
-		{
-			printf("\n\nsin: %.17e\ncos: %.17e\n\n", sinEpsilon, cosEpsilon);
-			throw runtime_error("(AllParticlePropagator::PropagateHelicly): |cosEpsilon| > 1, numerical error!");
-		}
-		if(abs(sinEpsilon) > 1.)
-		{
-			printf("\n\nsin: %.17e\ncos: %.17e\n\n", sinEpsilon, cosEpsilon);
-			throw runtime_error("(AllParticlePropagator::PropagateHelicly): |sinEpsilon| > 1, numerical error!");
-		}
 
 		if(ctBarrel <= ctProp) // The barrel exit is the closest exit
 		{
 			ctProp = ctBarrel;
 
+			// Check for a numerical error (negative propagation time to barrel)
 			if(ctBarrel < 0.)
 			{
 				stringstream message;
@@ -747,14 +753,16 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 				throw runtime_error(message.str());
 			}
 
-			// Because we know the cos and sin of epsilon, we know where the exit vector is in hxPr
-			// Creating it in hxPr then rotating back to helix is much faster than using additional trig functions
-			rFinal.x = R_hx*cosEpsilon;
-			rFinal.y = R_hx*sinEpsilon;
+			const Double_t normalizedR_hx = R_hx / normalization;
 
-			// In hxPr, rBeam>_hxPr is at phi = 0. Thus, to rotate our exit vector to
-			// the helix coordinate system, we can use the coordinates of rBeam>_hx.
-			// Then we simply have to subtract rBeam>_hx to get back to the beam frame
+			// Because we know the cos and sin of epsilon, we know where the exit vector is in hxPr
+			// Creating it in hxPr then rotating back to the helix system is the best way
+			rFinal.x = normalizedR_hx*cosEpsilon;
+			rFinal.y = normalizedR_hx*sinEpsilon;
+
+			// In hxPr, rBeam>_hx is at phi = 0. Thus, to convert from hxPr to hx coordinate
+			// systems, we can use rBeam>_hx as our rotation vector. To get back to the
+			// beam frame, simply subtract rBeam>_hx
 			(RotationXY(rBeam_hx.x/RBeam_hx, rBeam_hx.y/RBeam_hx).ForwardRotate(rFinal)) -= rBeam_hx;
 
 			// The particle struck the barrel; no daughters, no new rotation
@@ -763,21 +771,21 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 	}
 
 	// The particle doesn't strike the barrel; to find it's exit position,
-	// we simply rotate r0>_helix
-	RotationXY* thisRotation = new RotationXY(ctProp * omegaOverC);
+	// we simply rotate r0>_helix, then shift back to the beam frame
+	RotationXY* newRotation = new RotationXY(ctProp * omegaOverC);
 	rFinal = r0_hx;
-	(thisRotation->ForwardRotate(rFinal)) -= rBeam_hx;
+	(newRotation->ForwardRotate(rFinal)) -= rBeam_hx;
 
 	if(decays)
 	{
 		// Create a new cumulative rotation for the daughters by adding the rotation of the mother
-		thisRotation->Add(rotation);
-		rotation = thisRotation; // Return (by reference) the new rotation for this particle's daughters
+		newRotation->Add(rotation);
+		rotation = newRotation; // Return (by reference) the new rotation for this particle's daughters
 		return true; // Pass ownership of the (rotation) memory to the calling instance of Propagate
 	}
 	else
 	{
-		delete thisRotation;
+		delete newRotation;
 		return false;
 	}
 }
