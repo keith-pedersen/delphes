@@ -725,7 +725,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		{
 			printf("\nAbnormally high normalization error\n\n");
 			printf("\n\nsin: %.16e\ncos: %.16e\n(norm-1): %.16e\n", sinEpsilon, cosEpsilon, normalization-1.);
-			printf("r0 (m): %.2d\n", r0.Norm()/1000.);
+			printf("r0 (m): %.2f\n", r0.Norm()/1000.);
 			printf("gamma-1: %.3e\n\n", 1./sqrt(1.-r0Beta.Norm2())-1.);
 		}
 
