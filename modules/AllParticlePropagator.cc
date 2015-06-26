@@ -706,15 +706,30 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 			copysign(2. * KahanTriangleAreaPreSorted(smallToLargeTriangleSides[2], smallToLargeTriangleSides[1], smallToLargeTriangleSides[0]) / denom,
 				omegaOverC);
 
-		// For the cos, we should always subtract the two terms which are closest
-		// const Double_t cosEpsilon = (RBeam2_hx + R2_hx - fRadius2)/(2.*denom);
-		// This reduces rounding errors by about 3%
+		// For the cos, we should always subtract the two terms which are closest in:
+		//    const Double_t cosEpsilon = (RBeam2_hx + R2_hx - fRadius2)/(2.*denom);
+		// This reduces rounding errors by about 3%, and we can accomplish with a simple inequality
 		//
-		// For (a + b - c), if |a-c| < |b-c|, then we want to use (b + (a - c)) (and vice versa)
-		// Using (a-c)**2 < (b-c)**2, reduces to (a < b) ? (a + b > 2c) : (a + b < 2c)
+		// For (A + B - C), if |A-C| < |B-C|, then we want to use (B + (A - C)) (and vice versa)
+		// Using (A-C)**2 < (B-C)**2, reduces to (A < B) ? (A + B > 2C) : (A + B < 2C)
+		//
+		// We should also express a**2 - b**2 as (a - b)*(a + b), because it is much more accurate
+		// when a and b are very close.
+		// This reduces rounding errors by about 10%
+
+		/* Old form
 		const Double_t cosEpsilon = ((RBeam2_hx < R2_hx) ?
 			((RBeam2_hx + R2_hx > 2.*fRadius2) ? (R2_hx + (RBeam2_hx - fRadius2)) : (RBeam2_hx + (R2_hx - fRadius2))) :
 			((RBeam2_hx + R2_hx < 2.*fRadius2) ? (R2_hx + (RBeam2_hx - fRadius2)) : (RBeam2_hx + (R2_hx - fRadius2))))/(2.*denom);
+		*/
+
+		const Double_t cosEpsilon = ((RBeam2_hx < R2_hx) ?
+			((RBeam2_hx + R2_hx > 2.*fRadius2) ?
+				(R2_hx + (RBeam_hx - fRadius)*(RBeam_hx + fRadius)) :
+				(RBeam2_hx + (R_hx - fRadius)*(R_hx     + fRadius))) :
+			((RBeam2_hx + R2_hx < 2.*fRadius2) ?
+				(R2_hx + (RBeam_hx - fRadius)*(RBeam_hx + fRadius)) :
+				(RBeam2_hx + (R_hx - fRadius)*(R_hx     + fRadius))))/(2.*denom);
 
 		// Rounding errors will occasionally cause some non-perfect normalization. We can
 		// adjust for this easily.
