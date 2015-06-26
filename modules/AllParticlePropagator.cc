@@ -725,7 +725,7 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		{
 			printf("\nAbnormally high normalization error\n\n");
 			printf("\n\nsin: %.16e\ncos: %.16e\n(norm-1): %.16e\n\n", sinEpsilon, cosEpsilon, normalization-1.);
-			printf("gamma: %.3e\n" 1./sqrt(1-R0Beta2));
+			printf("gamma: %.3e\n", 1./sqrt(1-r0Beta.Norm2()));
 		}
 
 		// No need to correct for normalization before atan2, it is automatically done
