@@ -723,8 +723,9 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		// However, we should be seeing errors of O(epsilon) (i.e. 2e-16), so check for absurd errors
 		if(abs(normalization-1.) > 1e-14)
 		{
+			printf("\nAbnormally high normalization error\n\n");
 			printf("\n\nsin: %.16e\ncos: %.16e\n(norm-1): %.16e\n\n", sinEpsilon, cosEpsilon, normalization-1.);
-			throw runtime_error("(AllParticlePropagator::PropagateHelicly): normalization too high, numerical error!");
+			printf("gamma: %.3e\n" 1./sqrt(1-R0Beta2));
 		}
 
 		// No need to correct for normalization before atan2, it is automatically done
