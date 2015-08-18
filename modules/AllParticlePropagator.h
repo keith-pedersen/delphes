@@ -199,6 +199,17 @@ class AllParticlePropagator: public DelphesModule
 		TObjArray* fElectronOutputArray; //! Electron track Candidates
 		TObjArray* fMuonOutputArray; //! Muon track candidates
 
+		// Randomness test
+		//
+		// I noticed that there was SEVERE lack of uniformity in pt and eta distributions
+		// for ALL jets (not for the top jets, which are still smooth). 
+		// I attributed this to pileup, and to the small sample from which it is drawn.
+		// But with a sample of 2000 and a <mu>=40, I couldn't account for the severity
+		// of the spikes.
+		// Then, I realized that whatever spikes exist in the pileup particles is ENHANCED
+		// by the anti-kt clustering, so it looks much worse in jets. 
+		// std::vector<UInt_t> selectionTracker;
+
 		ClassDef(AllParticlePropagator, 2)
 };
 

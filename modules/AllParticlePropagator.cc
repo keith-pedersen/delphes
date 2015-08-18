@@ -7,6 +7,7 @@
 #include "AllParticlePropagator.h"
 
 #include <cstdio>
+#include <algorithm>
 
 //#include "TROOT.h"
 #include "TRandom.h"
@@ -105,6 +106,9 @@ void AllParticlePropagator::Init()
 	fMeanPileup = GetDouble("MeanPileup", 0.);
 
 	PropagateAndStorePileup(std::string(GetString("PileupFile", "")));
+
+	// Randomnes test
+	//selectionTracker = std::vector<UInt_t>(pileupStore.size(), 0);
 }
 
 //------------------------------------------------------------------------------
@@ -113,6 +117,17 @@ void AllParticlePropagator::Finish()
 {
 	// Delete all the Pileup Candidates
 	delete pileupFactory;
+
+	// Randomnes test
+	/*
+	cout << endl << endl;
+	for(unsigned int i = 0; i < selectionTracker.size(); ++i)
+	{
+		cout << i << "\t" << selectionTracker[i] << endl;
+	}
+
+	cout << endl << endl;
+	*/
 }
 
 //------------------------------------------------------------------------------
@@ -1035,6 +1050,12 @@ void AllParticlePropagator::FillPileup()
 		}
 	}
 	//cout << endl << "exiting loop" << endl;
+
+	// Randomnes test
+	//for(auto itIndex = pileupIndices.begin(); itIndex not_eq pileupIndices.end(); ++itIndex)
+	//{
+	//	++selectionTracker[*itIndex];
+	//}	
 }
 
 //------------------------------------------------------------------------------
