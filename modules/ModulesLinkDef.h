@@ -28,6 +28,7 @@
 #include "modules/Delphes.h"
 
 #include "modules/AngularSmearing.h"
+#include "modules/PhotonConversions.h"
 #include "modules/ParticlePropagator.h"
 #include "modules/Efficiency.h"
 #include "modules/IdentificationMap.h"
@@ -57,6 +58,7 @@
 #include "modules/Cloner.h"
 #include "modules/Weighter.h"
 #include "modules/Hector.h"
+#include "modules/JetFlavorAssociation.h"
 #include "modules/ExampleModule.h"
 
 //KDP modules
@@ -75,6 +77,7 @@
 #pragma link C++ class Delphes+;
 
 #pragma link C++ class AngularSmearing+;
+#pragma link C++ class PhotonConversions+;
 #pragma link C++ class ParticlePropagator+;
 #pragma link C++ class Efficiency+;
 #pragma link C++ class IdentificationMap+;
@@ -104,6 +107,7 @@
 #pragma link C++ class Cloner+;
 #pragma link C++ class Weighter+;
 #pragma link C++ class Hector+;
+#pragma link C++ class JetFlavorAssociation+;
 #pragma link C++ class ExampleModule+;
 
 //KDP modules
