@@ -48,6 +48,7 @@
 #pragma link C++ class TimedEvent+;
 #pragma link C++ class LHCOEvent+;
 #pragma link C++ class LHEFEvent+;
+#pragma link C++ class LHEFWeight+;
 #pragma link C++ class HepMCEvent+;
 #pragma link C++ class GenParticle+;
 #pragma link C++ class Vertex+;
