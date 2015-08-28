@@ -161,6 +161,9 @@ void FastJetFinder::Init()
   // - voronoi based areas -
   fEffectiveRfact = GetDouble("EffectiveRfact", 1.0);
 
+  // -- Strategy parameter for runs which crash due to bug in LazyTiling9.cc
+  fStrategy = GetInt("Strategy", 1); // Default to Best
+
   switch(fAreaAlgorithm)
   {
     case 1:
@@ -199,14 +202,14 @@ void FastJetFinder::Init()
       fDefinition = new JetDefinition(plugin);
       break;
     case 4:
-      fDefinition = new JetDefinition(kt_algorithm, fParameterR);
+      fDefinition = new JetDefinition(kt_algorithm, fParameterR, fastjet::RecombinationScheme::E_scheme, fastjet::Strategy(fStrategy));
       break;
     case 5:
-      fDefinition = new JetDefinition(cambridge_algorithm, fParameterR);
+      fDefinition = new JetDefinition(cambridge_algorithm, fParameterR, fastjet::RecombinationScheme::E_scheme, fastjet::Strategy(fStrategy));
       break;
     default:
     case 6:
-      fDefinition = new JetDefinition(antikt_algorithm, fParameterR);
+      fDefinition = new JetDefinition(antikt_algorithm, fParameterR, fastjet::RecombinationScheme::E_scheme, fastjet::Strategy(fStrategy));
       break;
     case 7:
       recomb = new WinnerTakeAllRecombiner();
