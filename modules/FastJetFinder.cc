@@ -254,6 +254,9 @@ void FastJetFinder::Init()
 
   fOutputArray = ExportArray(GetString("OutputArray", "jets"));
   fRhoOutputArray = ExportArray(GetString("RhoOutputArray", "rho"));
+  
+  // Open file for debugging FastJet seg fault
+  mostRecentFastJetInput.open("offender.raw.PxPyPzE", std::ios::trunc | std::ios::out);
 }
 
 //------------------------------------------------------------------------------
@@ -273,6 +276,9 @@ void FastJetFinder::Finish()
   if(fPlugin) delete static_cast<JetDefinition::Plugin*>(fPlugin);
   if(fRecomb) delete static_cast<JetDefinition::Recombiner*>(fRecomb);
   if(fNjettinessPlugin) delete static_cast<JetDefinition::Plugin*>(fNjettinessPlugin);
+  
+  // Close file for debugging FastJet seg fault
+  mostRecentFastJetInput.close();
 }
 
 //------------------------------------------------------------------------------
@@ -307,6 +313,40 @@ void FastJetFinder::Process()
     inputList.push_back(jet);
     ++number;
   }
+  
+  // Before each clustering, I want to output the input vector of PseudoJets to a file
+  // I will constantly overwrite this file, but always with an empty line added at the end of the newest list
+  // Thus the file should look something like this (although probably the overwritten lines will be mangled)
+
+  /* 00   run3vec1
+   * 01   run3vec2
+   * 02   run3vec3
+   * 03
+   * 04   run2vec5
+   * 05   
+   * 06   run1vec6
+  */
+
+  // Once the program crashes, I will want to take the most recent list (which will 
+  // be from the start to the first empty line). This can be accomplished with the following shell command:
+  //
+  // sed -e '/^$/,$d' offender.raw.PxPyPzE > offender.PxPyPzE
+  
+  // Reset to start of file
+  mostRecentFastJetInput.seekp(0, mostRecentFastJetInput.beg);
+  // Create output buffer based on formatted output
+  // Maximum size of binary64 with 17 digits of precision: 23 (negative, e.g. -2.7941549819892586e-01)
+  // Size of buffer needed: 4*23 + 3*5 + 3 + 1 = 111 
+  char buff[128]; // Add some extra room for safety
+
+  for(std::vector<fastjet::PseudoJet>::iterator itVec4 = inputList.begin(); itVec4 not_eq inputList.end(); ++itVec4)
+  {
+    //Print to degugging file
+    sprintf(buff, "  %.16e     %.16e     %.16e    %.16e\n", itVec4->px(), itVec4->py(), itVec4->pz(), itVec4->E());
+    mostRecentFastJetInput << buff;
+  }
+  // Add empty line and flush the write buffer
+  mostRecentFastJetInput << std::endl;
 
   // construct jets
   if(fAreaDefinition)

@@ -30,6 +30,7 @@
 #include "classes/DelphesModule.h"
 
 #include <vector>
+#include <fstream>
 
 class TObjArray;
 class TIterator;
@@ -181,6 +182,9 @@ private:
   /// the plugin has been used...
   plugin_strategy = 999
   */
+  
+  // File for storing most recent FastJet input, for debugging seg fault
+  std::ofstream mostRecentFastJetInput;
 
 #if !defined(__CINT__) && !defined(__CLING__)
   struct TEstimatorStruct
