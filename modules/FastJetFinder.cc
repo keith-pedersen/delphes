@@ -305,14 +305,6 @@ void FastJetFinder::Process()
   // loop over input objects
   fItInputArray->Reset();
   number = 0;
-  while((candidate = static_cast<Candidate*>(fItInputArray->Next())))
-  {
-    momentum = candidate->Momentum;
-    jet = PseudoJet(momentum.Px(), momentum.Py(), momentum.Pz(), momentum.E());
-    jet.set_user_index(number);
-    inputList.push_back(jet);
-    ++number;
-  }
   
   // Before each clustering, I want to output the input vector of PseudoJets to a file
   // I will constantly overwrite this file, but always with an empty line added at the end of the newest list
@@ -334,17 +326,22 @@ void FastJetFinder::Process()
   
   // Reset to start of file
   mostRecentFastJetInput.seekp(0, mostRecentFastJetInput.beg);
-  // Create output buffer based on formatted output
-  // Maximum size of binary64 with 17 digits of precision: 23 (negative, e.g. -2.7941549819892586e-01)
-  // Size of buffer needed: 4*23 + 3*5 + 3 + 1 = 111 
-  char buff[128]; // Add some extra room for safety
-
-  for(std::vector<fastjet::PseudoJet>::iterator itVec4 = inputList.begin(); itVec4 not_eq inputList.end(); ++itVec4)
+  // Create output buffer twice as big as we probably need
+  char buff[256];
+  
+  while((candidate = static_cast<Candidate*>(fItInputArray->Next())))
   {
-    //Print to degugging file
-    sprintf(buff, "  %.16e     %.16e     %.16e    %.16e\n", itVec4->px(), itVec4->py(), itVec4->pz(), itVec4->E());
+    momentum = candidate->Momentum;
+    jet = PseudoJet(momentum.Px(), momentum.Py(), momentum.Pz(), momentum.E());
+    jet.set_user_index(number);
+    inputList.push_back(jet);
+    ++number;
+    
+    sprintf(buff, "  %.16e     %.16e     %.16e    %.16e     #   %d\n", 
+      inputList.back().px(), inputList.back().py(), inputList.back().pz(), inputList.back().E(), candidate->PID);
     mostRecentFastJetInput << buff;
   }
+  
   // Add empty line and flush the write buffer
   mostRecentFastJetInput << std::endl;
 
