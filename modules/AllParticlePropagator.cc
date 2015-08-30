@@ -51,6 +51,14 @@ Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Do
 	//return sqrt((a + (b + c))*(a + (b - c))*(c + (b - a))*(a + (c - b)))/4.;
 }
 
+void CheckNaN(const TLorentzVector& vec4)
+{
+        return((vec4.X() not_eq vec4.X()) or
+                (vec4.Y() not_eq vec4.Y()) or
+                (vec4.Z() not_eq vec4.Z()) or
+                (vec4.T() not_eq vec4.T())); 
+}
+
 inline Double_t Squared(const Double_t arg) {return arg*arg;}
 
 // This code deliberately eschews TMath
@@ -295,6 +303,12 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 
 	// Begin temporary variable scope
 	{
+                // Check for NaN in Position or Momentum
+                if(CheckNaN(candidate->Momentum))
+                        throw runtime_error("Incoming momentum is NaN!");
+                if(CheckNaN(candidate->Position))
+                        throw runtime_error("Incoming position is NaN!");
+                
 		// Assume the particle's proper lifetime is stored in [mm]. If the particle is
 		// final state (Status == 1), make cTau absurdly large. This will help later,
 		// when we find the shortest of two times (decay or cylinder strike). It also
@@ -460,6 +474,9 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			position.SetXYZT(rFinal.x, rFinal.y,
 				z0 + z0Beta * ctProp,
 				position.T() + ctProp);
+                                
+                        if(CheckNaN(position))
+                                throw runtime_error("Outgoing position is NaN!");
                                 
                         // Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
 			// In reality, we should just declare that this particle does not decay
