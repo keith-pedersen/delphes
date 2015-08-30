@@ -51,7 +51,7 @@ Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Do
 	//return sqrt((a + (b + c))*(a + (b - c))*(c + (b - a))*(a + (c - b)))/4.;
 }
 
-void CheckNaN(const TLorentzVector& vec4)
+bool CheckNaN(const TLorentzVector& vec4)
 {
         return((vec4.X() not_eq vec4.X()) or
                 (vec4.Y() not_eq vec4.Y()) or
