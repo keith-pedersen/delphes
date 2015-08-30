@@ -34,8 +34,16 @@ const Double_t METERS_to_mm = 1E3;
 Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Double_t c)
 {
 	// EXTRA PARENTHESIS ARE DELIBERATE, DO NOT REMOVE
-	return sqrt((a + (b + c))*(c - (a - b))*(c + (a - b))*(a + (b - c)))/4.;
-	// See "Mathematics Written in Sand" by W. Kahan, bottom of page 10
+	//return sqrt((a + (b + c))*(c - (a - b))*(c + (a - b))*(a + (b - c)))/4.;
+	const Double_t area =  sqrt((a + (b + c))*(c - (a - b))*(c + (a - b))*(a + (b - c)))/4.;
+        
+        // Test for NaN
+        if(area not_eq area)
+                throw runtime_error("\n\n\ninvalid triangle area, nan\n\n\n");
+        else
+                return area;
+        
+        // See "Mathematics Written in Sand" by W. Kahan, bottom of page 10
 	// http://www.cs.berkeley.edu/~wkahan/MathSand.pdf#page=10
 
 	// My alternate form, with no double subtraction. Tests to be only a teensy
@@ -301,21 +309,20 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			z0 = position.Z();
 
 		{
-			const Double_t creationRadius = sqrt(R02);
-
 			// Check that the particle was created inside the cylinder
-			if((creationRadius >= fRadius) or (abs(z0) >= fHalfLength))
+			if((R02 >= fRadius2) or (abs(z0) >= fHalfLength))
 			{
 				stringstream message;
 				message << "(AllParticlePropagator::Propagate): Particle (" << candidate->PID << ") created outside the cylinder ";
-				message << "( " << creationRadius << " , " << z0 << " )!\n";
+				message << "( " << sqrt(R02) << " , " << z0 << " )!\n";
 				message << "Did you include the entire decay chain? Did you re-index?\n";
 				throw runtime_error(message.str());
 				// For more information on this error, see #5 in the class description in the header file
 			}
 
-			// candidate::Creation radius is stored as a Float_t; check for sanity, then store, otherwise we could have precision conversion problems
-			candidate->CreationRadius = creationRadius;
+			// candidate::Creation radius is stored as a Float_t.
+                        // Check for sanity, then store, otherwise we could have precision conversion problems
+			candidate->CreationRadius = sqrt(R02);
 		}
 
 		if(cTau <= 0.) // The particle decayed instantaneously (or has an invalid stored cTau)
@@ -370,7 +377,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 
 			// Next, find any particle which CAN propagate helicly
 			//    1. |q| != 0
-			//    2. |R0Beta2| != 0
+			//    2. |R0Beta2| != 0 (i.e. there is transverse velocity)
 			if((q * R0Beta2) not_eq 0.)
 			{
 				// In order to model helical propagation, we'll need to know the gyration frequency:
@@ -453,8 +460,8 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			position.SetXYZT(rFinal.x, rFinal.y,
 				z0 + z0Beta * ctProp,
 				position.T() + ctProp);
-
-			// Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
+                                
+                        // Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
 			// In reality, we should just declare that this particle does not decay
 			// But, since I just found a different source of error in my code,
 			// let's just keep this here for now until I'm confident that
