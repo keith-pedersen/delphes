@@ -305,7 +305,18 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 	{
                 // Check for NaN in Position or Momentum
                 if(CheckNaN(candidate->Momentum))
-                        throw runtime_error("Incoming momentum is NaN!");
+                {
+			if(candidate->M1 == 0)
+				throw runtime_error("Incoming momentum is NaN! No mother!");
+			
+			Candidate* mother = static_cast<Candidate*>(currentInputArray->At(candidate->M1));
+
+			if(mother->TrackLength >= 0.)
+		       		throw runtime_error("Incoming momentum is NaN! Mother was propagated!");
+			else
+				throw runtime_error("Incoming momentum is NaN! Mother was NOT propagated!");
+				
+		}
                 if(CheckNaN(candidate->Position))
                         throw runtime_error("Incoming position is NaN!");
                 
