@@ -321,7 +321,11 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
                                 if(rotation)
                                         throw runtime_error("Incoming momentum is NaN! Mother was propagated! Active rotation!");
 		       		else
+                                {
+                                        cout << "\n\nmother ID:  " << mother->PID << endl;
+                                        cout << "mother E:  " << mother->Momentum.E() << endl;
                                         throw runtime_error("Incoming momentum is NaN! Mother was propagated! No active rotation!");
+                                }
                         }
 			else
 				throw runtime_error("Incoming momentum is NaN! Mother was NOT propagated!");
