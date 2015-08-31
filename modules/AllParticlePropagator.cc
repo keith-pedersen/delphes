@@ -317,7 +317,12 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			Candidate* mother = static_cast<Candidate*>(currentInputArray->At(candidate->M1));
 
 			if(mother->TrackLength >= 0.)
-		       		throw runtime_error("Incoming momentum is NaN! Mother was propagated!");
+                        {
+                                if(rotation)
+                                        throw runtime_error("Incoming momentum is NaN! Mother was propagated! Active rotation!");
+		       		else
+                                        throw runtime_error("Incoming momentum is NaN! Mother was propagated! No active rotation!");
+                        }
 			else
 				throw runtime_error("Incoming momentum is NaN! Mother was NOT propagated!");
 				
