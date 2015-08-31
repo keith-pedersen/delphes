@@ -302,6 +302,15 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			// candidate::Creation radius is stored as a Float_t; check for sanity, then store, otherwise we could have precision conversion problems
 			candidate->CreationRadius = creationRadius;
 		}
+                
+                // Make sure the particle has energy.
+                // This check was in response to the side-effectsof Pythia forcing a Particle with no energy to decay.
+                // It's daughters subsequently have (nan) for their 4-momenta. This causes all sorts of havoc downstream.
+                if(candidate->Momentum.E() == 0.)
+                {
+                        NullifyDaughters(candidate, true); // Nullify this particle and any daughters
+                        return true; // Return to the calling instance immedietely
+                }
 
 		if(cTau <= 0.) // The particle decayed instantaneously (or has an invalid stored cTau)
 		{
