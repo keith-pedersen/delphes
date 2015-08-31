@@ -51,12 +51,17 @@ Double_t KahanTriangleAreaPreSorted(const Double_t a, const Double_t b, const Do
 	//return sqrt((a + (b + c))*(a + (b - c))*(c + (b - a))*(a + (c - b)))/4.;
 }
 
-bool CheckNaN(const TLorentzVector& vec4)
+bool HasNaN(const TLorentzVector& vec4)
 {
-        return((vec4.X() not_eq vec4.X()) or
+        const bool invalid = ((vec4.X() not_eq vec4.X()) or
                 (vec4.Y() not_eq vec4.Y()) or
                 (vec4.Z() not_eq vec4.Z()) or
-                (vec4.T() not_eq vec4.T())); 
+                (vec4.T() not_eq vec4.T()));
+                
+        if(invalid)
+                printf("\n\n  %.1e   %.1e   %.1e   %.1e\n\n", vec4.T(), vec4.X(), vec4.Y(), vec4.Z());
+        
+        return invalid;        
 }
 
 inline Double_t Squared(const Double_t arg) {return arg*arg;}
@@ -304,7 +309,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 	// Begin temporary variable scope
 	{
                 // Check for NaN in Position or Momentum
-                if(CheckNaN(candidate->Momentum))
+                if(HasNaN(candidate->Momentum))
                 {
 			if(candidate->M1 == 0)
 				throw runtime_error("Incoming momentum is NaN! No mother!");
@@ -317,7 +322,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				throw runtime_error("Incoming momentum is NaN! Mother was NOT propagated!");
 				
 		}
-                if(CheckNaN(candidate->Position))
+                if(HasNaN(candidate->Position))
                         throw runtime_error("Incoming position is NaN!");
                 
 		// Assume the particle's proper lifetime is stored in [mm]. If the particle is
@@ -486,7 +491,7 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				z0 + z0Beta * ctProp,
 				position.T() + ctProp);
                                 
-                        if(CheckNaN(position))
+                        if(HasNaN(position))
                                 throw runtime_error("Outgoing position is NaN!");
                                 
                         // Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
@@ -1327,7 +1332,7 @@ void RotationXY::ForwardRotateDaughterMomentum(Candidate* const daughter) const
 	TLorentzVector& pMu = daughter->Momentum;
 	// Copies of the original, since we're changing it
         
-        if(CheckNaN(pMu))
+        if(HasNaN(pMu))
                 throw runtime_error("Attempting to rotate daughter with bad momentum!");
         
 	Double_t
