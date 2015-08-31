@@ -424,8 +424,8 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 				//    omega / c == -q fBz c / energy / METERS_to_mm              [rad/mm]
 				//
 				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
-
-				// PropagateHelicly() will propagate the particle. It has 4 returns. Its official
+                                
+                                // PropagateHelicly() will propagate the particle. It has 4 returns. Its official
 				// return indicates whether "rotation" (passed be reference) had an angle added
 				// to it. Of  course all charged particles rotate, but rotation only needs to change when
 				// the particle decays. If it strikes the cylinder, its daughters don't require
@@ -797,6 +797,9 @@ bool AllParticlePropagator::PropagateHelicly(Candidate* const candidate, const b
 		// No need to correct for normalization before atan2, it is automatically done
 		// (i.e. only normalize when the particle strikes the barrel)
 		const Double_t ctBarrel = (atan2(sinEpsilon, cosEpsilon) - phi0) / omegaOverC;
+                
+                if(ctBarrel not_eq ctBarrel)
+                        throw runtime_error("ctBarrel is NaN!");
 
 		if(ctBarrel <= ctProp) // The barrel exit is the closest exit
 		{
@@ -1323,6 +1326,10 @@ void RotationXY::ForwardRotateDaughterMomentum(Candidate* const daughter) const
 {
 	TLorentzVector& pMu = daughter->Momentum;
 	// Copies of the original, since we're changing it
+        
+        if(CheckNaN(pMu))
+                throw runtime_error("Attempting to rotate daughter with bad momentum!");
+        
 	Double_t
 		px0 = pMu.Px(),
 		py0 = pMu.Py();
