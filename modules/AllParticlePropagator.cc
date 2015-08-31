@@ -286,21 +286,19 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			z0 = position.Z();
 
 		{
-			const Double_t creationRadius = sqrt(R02);
-
 			// Check that the particle was created inside the cylinder
-			if((creationRadius >= fRadius) or (abs(z0) >= fHalfLength))
+			if((R02 >= fRadius2) or (abs(z0) >= fHalfLength))
 			{
 				stringstream message;
 				message << "(AllParticlePropagator::Propagate): Particle (" << candidate->PID << ") created outside the cylinder ";
-				message << "( " << creationRadius << " , " << z0 << " )!\n";
+				message << "( " << sqrt(R02) << " , " << z0 << " )!\n";
 				message << "Did you include the entire decay chain? Did you re-index?\n";
 				throw runtime_error(message.str());
 				// For more information on this error, see #5 in the class description in the header file
 			}
 
 			// candidate::Creation radius is stored as a Float_t; check for sanity, then store, otherwise we could have precision conversion problems
-			candidate->CreationRadius = creationRadius;
+			candidate->CreationRadius = sqrt(R02);
 		}
 
 		if(cTau <= 0.) // The particle decayed instantaneously (or has an invalid stored cTau)
@@ -308,184 +306,194 @@ bool AllParticlePropagator::Propagate(Candidate* const candidate,	RotationXY con
 			candidate->TrackLength = 0.; // This indicates that the particle has been "processed
 			// Nothing else to do
 		}
-		else
+                else
 		{
-			const TLorentzVector& momentum = candidate->Momentum; // 4-momentum
+                        const TLorentzVector& momentum = candidate->Momentum; // 4-momentum
+                        
+                        // Make sure the particle is actually moving, with a valid energy
+                        if(momentum.E() <= candidate->Mass)
+                        {
+                                candidate->Status = 0; // Nullify this particle
+                                NullifyDaughters(candidate); // Now nullify any daughters
+                                return true; // Return to the calling instance immedietely
+                        }
+                        else
+                        {
+                                // We'll be using cylindrical coordinates (r, z) for obvious reasons
+                                // Assume 4-position is stored in [mm]
+                                // Assume 4-momentum & mass is stored in [GeV]
+                                // Assume charge is stored in elementary charged [e]
+                                const VecXY r0(position.X(), position.Y());
+                                const Double_t
+                                        energy = momentum.E(),
+                                        q = candidate->Charge;
 
-			// We'll be using cylindrical coordinates (r, z) for obvious reasons
-			// Assume 4-position is stored in [mm]
-			// Assume 4-momentum & mass is stored in [GeV]
-			// Assume charge is stored in elementary charged [e]
-			const VecXY r0(position.X(), position.Y());
-			const Double_t
-				energy = momentum.E(),
-				q = candidate->Charge;
+                                // It's easier to work with beta than momentum
+                                const VecXY r0Beta( momentum.Px()/energy, momentum.Py()/energy );
+                                const Double_t R0Beta2 = r0Beta.Norm2(); // Transverse beta (used throughout instead of pT)
+                                const Double_t z0Beta = momentum.Pz()/energy;
 
-			// It's easier to work with beta than momentum
-			const VecXY r0Beta( momentum.Px()/energy, momentum.Py()/energy );
-			const Double_t R0Beta2 = r0Beta.Norm2(); // Transverse beta (used throughout instead of pT)
-			const Double_t z0Beta = momentum.Pz()/energy;
+                                // The next 3 variables will be altered by the propagating routine, when the solutions are found.
 
-			// The next 3 variables will be altered by the propagating routine, when the solutions are found.
+                                // "decays" lets us know whether or not the particle decays. Currently, we will assume it does.
+                                bool decays = true;
 
-			// "decays" lets us know whether or not the particle decays. Currently, we will assume it does.
-			bool decays = true;
+                                // The total lab propagation time; currently, that's the time until decay (cTau * gamma).
+                                // For massless particles, this will be (inf). That's OK, because we will find the shortest time.
+                                // Use the absolute value JUST IN CASE the mass (or CTau) is accidently -0, since
+                                // we will be altering ctProp only if we find a shorter/smaller time
+                                Double_t ctProp = abs(cTau * (energy / candidate->Mass));
 
-			// The total lab propagation time; currently, that's the time until decay (cTau * gamma).
-			// For massless particles, this will be (inf). That's OK, because we will find the shortest time.
-			// Use the absolute value JUST IN CASE the mass (or CTau) is accidently -0, since
-			// we will be altering ctProp only if we find a shorter/smaller time
-			Double_t ctProp = abs(cTau * (energy / candidate->Mass));
+                                // The particle's final position; default to initial position.
+                                VecXY rFinal(r0);
 
-			// The particle's final position; default to initial position.
-			VecXY rFinal(r0);
+                                // Figure out how long till the particle hits the endcap.
+                                {
+                                        const Double_t ctEndcap = (copysign(fHalfLength, z0Beta) - z0) / z0Beta;
+                                        // copysign() ensures that, if (z0Beta = (+/-)0.), we'll get (ctEndcap = inf)
+                                        // (IFF the particle is inside the cylinder, which we already verified)
 
-			// Figure out how long till the particle hits the endcap.
-			{
-				const Double_t ctEndcap = (copysign(fHalfLength, z0Beta) - z0) / z0Beta;
-				// copysign() ensures that, if (z0Beta = (+/-)0.), we'll get (ctEndcap = inf)
-				// (IFF the particle is inside the cylinder, which we already verified)
+                                        if(ctEndcap <= ctProp)
+                                        {
+                                                ctProp = ctEndcap;
+                                                decays = false; // Does not decay, exits the cylinder
+                                        }
+                                }
 
-				if(ctEndcap <= ctProp)
-				{
-					ctProp = ctEndcap;
-					decays = false; // Does not decay, exits the cylinder
-				}
-			}
+                                // Next, find any particle which CAN propagate helicly
+                                //    1. |q| != 0
+                                //    2. |R0Beta2| != 0
+                                if((q * R0Beta2) not_eq 0.)
+                                {
+                                        // In order to model helical propagation, we'll need to know the gyration frequency:
+                                        //
+                                        //    omega = -q fBz /(gamma m)     [rad/s]
+                                        //
+                                        // Here, omega uses the sign convention of a RH xyz coordinate system:
+                                        //
+                                        //    x^ = cos(0)   and    y^ = sin(Pi/2)   with     z^ parallel to B>
+                                        //
+                                        // Thus, the LH rotation of a positively charged (q>0) particle is parameterized
+                                        // by a steadily  *decreasing*  angle (a negative frequency).
+                                        //
+                                        // Since we use (ct) instead of (t), it is easier to work with omega/c:
+                                        //
+                                        //    deltaPhi == omega*t == (omega/c)*ct
+                                        //
+                                        //    omega / c == -q fBz /(gamma m c) == -q fBz / (energy / c)  [rad/m]
+                                        //    omega / c == -q fBz c / energy / METERS_to_mm              [rad/mm]
+                                        //
+                                        const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
 
-			// Next, find any particle which CAN propagate helicly
-			//    1. |q| != 0
-			//    2. |R0Beta2| != 0
-			if((q * R0Beta2) not_eq 0.)
-			{
-				// In order to model helical propagation, we'll need to know the gyration frequency:
-				//
-				//    omega = -q fBz /(gamma m)     [rad/s]
-				//
-				// Here, omega uses the sign convention of a RH xyz coordinate system:
-				//
-				//    x^ = cos(0)   and    y^ = sin(Pi/2)   with     z^ parallel to B>
-				//
-				// Thus, the LH rotation of a positively charged (q>0) particle is parameterized
-				// by a steadily  *decreasing*  angle (a negative frequency).
-				//
-				// Since we use (ct) instead of (t), it is easier to work with omega/c:
-				//
-				//    deltaPhi == omega*t == (omega/c)*ct
-				//
-				//    omega / c == -q fBz /(gamma m c) == -q fBz / (energy / c)  [rad/m]
-				//    omega / c == -q fBz c / energy / METERS_to_mm              [rad/mm]
-				//
-				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
+                                        // PropagateHelicly() will propagate the particle. It has 4 returns. Its official
+                                        // return indicates whether "rotation" (passed be reference) had an angle added
+                                        // to it. Of  course all charged particles rotate, but rotation only needs to change when
+                                        // the particle decays. If it strikes the cylinder, its daughters don't require
+                                        // rotation (so don't bother adding its rotation).
+                                        // The propagation solutions (ctProp and rFinal) are also passed by reference.
+                                        newRotation = PropagateHelicly(candidate, decays,
+                                                                            r0, z0,
+                                                                            r0Beta, z0Beta,
+                                                                            omegaOverC,
+                                                                            rotation,
+                                                                            ctProp, rFinal);
+                                        decays = newRotation;
+                                }
+                                else
+                                {
+                                        // We can use a transverse vector equation to solve for the straight-line propagation time.
+                                        //
+                                        //           rFinal> = r0> + ctBarrel * r0Beta>
+                                        //
+                                        // Square both sides, create the quadratic equation for ctBarrel:
+                                        //
+                                        //           a = R0Beta2       b = 2 * r0>.r0Beta       c = (R02 - fRadius2)
+                                        //
+                                        // In order to prevent catastrophic cancellation (for very small ctBarrel when b > 0),
+                                        // we should use the two forms of the roots:
+                                        //
+                                        //         ctBarrel1 = -c / (b/2 + sign(b)*sqrt((b/2)**2 - ac)
+                                        //         ctBarrel2 = -(b/2 + sign(b)*sqrt((b/2)**2 - ac))/a
+                                        //
+                                        // Because ct needs to be positive (and c < 0 and a > 0), we must choose:
+                                        //
+                                        //         ctBarrel1 when b > 0
+                                        //         ctBarrel2 when b <= 0
 
-				// PropagateHelicly() will propagate the particle. It has 4 returns. Its official
-				// return indicates whether "rotation" (passed be reference) had an angle added
-				// to it. Of  course all charged particles rotate, but rotation only needs to change when
-				// the particle decays. If it strikes the cylinder, its daughters don't require
-				// rotation (so don't bother adding its rotation).
-				// The propagation solutions (ctProp and rFinal) are also passed by reference.
-				newRotation = PropagateHelicly(candidate, decays,
-					                            r0, z0,
-					                            r0Beta, z0Beta,
-					                            omegaOverC,
-					                            rotation,
-					                            ctProp, rFinal);
-				decays = newRotation;
-			}
-			else
-			{
-				// We can use a transverse vector equation to solve for the straight-line propagation time.
-				//
-				//           rFinal> = r0> + ctBarrel * r0Beta>
-				//
-				// Square both sides, create the quadratic equation for ctBarrel:
-				//
-				//           a = R0Beta2       b = 2 * r0>.r0Beta       c = (R02 - fRadius2)
-				//
-				// In order to prevent catastrophic cancellation (for very small ctBarrel when b > 0),
-				// we should use the two forms of the roots:
-				//
-				//         ctBarrel1 = -c / (b/2 + sign(b)*sqrt((b/2)**2 - ac)
-				//         ctBarrel2 = -(b/2 + sign(b)*sqrt((b/2)**2 - ac))/a
-				//
-				// Because ct needs to be positive (and c < 0 and a > 0), we must choose:
-				//
-				//         ctBarrel1 when b > 0
-				//         ctBarrel2 when b <= 0
+                                        const Double_t halfB = r0.Dot(r0Beta);
+                                        const bool bIsPositive = halfB > 0.; // Get the conditional jump in the pipeline
+                                        const Double_t rootTerm = sqrt(halfB*halfB + (fRadius2 - R02)*R0Beta2);
 
-				const Double_t halfB = r0.Dot(r0Beta);
-				const bool bIsPositive = halfB > 0.; // Get the conditional jump in the pipeline
-				const Double_t rootTerm = sqrt(halfB*halfB + (fRadius2 - R02)*R0Beta2);
+                                        const Double_t ctBarrel =
+                                                (bIsPositive ?
+                                                        (fRadius2 - R02)/(halfB + rootTerm) :
+                                                        (rootTerm - halfB)/R0Beta2);
 
-				const Double_t ctBarrel =
-					(bIsPositive ?
-						(fRadius2 - R02)/(halfB + rootTerm) :
-						(rootTerm - halfB)/R0Beta2);
+                                        if(ctBarrel <= ctProp)
+                                        {
+                                                ctProp = ctBarrel;
 
-				if(ctBarrel <= ctProp)
-				{
-					ctProp = ctBarrel;
+                                                if(ctBarrel < 0.)
+                                                        throw runtime_error("(AllParticlePropagator::Propagate): Keith, you fat fuck, your straight-line math is all wrong!");
+                                                decays = false;
+                                        }
 
-					if(ctBarrel < 0.)
-						throw runtime_error("(AllParticlePropagator::Propagate): Keith, you fat fuck, your straight-line math is all wrong!");
-					decays = false;
-				}
+                                        rFinal += r0Beta*ctProp; // rFinal was initialized to initial position
+                                }
 
-				rFinal += r0Beta*ctProp; // rFinal was initialized to initial position
-			}
+                                // Set the final position
+                                position.SetXYZT(rFinal.x, rFinal.y,
+                                        z0 + z0Beta * ctProp,
+                                        position.T() + ctProp);
 
-			// Set the final position
-			position.SetXYZT(rFinal.x, rFinal.y,
-				z0 + z0Beta * ctProp,
-				position.T() + ctProp);
+                                // Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
+                                // In reality, we should just declare that this particle does not decay
+                                // But, since I just found a different source of error in my code,
+                                // let's just keep this here for now until I'm confident that
+                                // we can safely make such a statement.
+                                if(decays and ((rFinal.Norm() >= fRadius) or (abs(position.Z()) >= fHalfLength)))
+                                {
+                                        const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
+                                        printf("rFinal: %.16e\n", rFinal.Norm());
+                                        printf("zFinal: %.16e\n", position.Z());
+                                        printf("omega:  %.16e\n", omegaOverC);
+                                        throw runtime_error("(AllParticleProagator::Propagate) Particle propagated to outside of cylinder!");
+                                }
 
-			// Check for propagation error (i.e. supposedly decays but actually outside of cylinder)
-			// In reality, we should just declare that this particle does not decay
-			// But, since I just found a different source of error in my code,
-			// let's just keep this here for now until I'm confident that
-			// we can safely make such a statement.
-			if(decays and ((rFinal.Norm() >= fRadius) or (abs(position.Z()) >= fHalfLength)))
-			{
-				const Double_t omegaOverC = (-q * fBz / energy) * (c_light / (GeV_to_eV * METERS_to_mm)); // [rad/mm]
-				printf("rFinal: %.16e\n", rFinal.Norm());
-				printf("zFinal: %.16e\n", position.Z());
-				printf("omega:  %.16e\n", omegaOverC);
-				throw runtime_error("(AllParticleProagator::Propagate) Particle propagated to outside of cylinder!");
-			}
+                                // Set the track length and use it to do a simple pre-sort of track candidates,
+                                // so that the charged hardron output array doesn't get filled with a bunch of invisible tracks
+                                {
+                                        const Double_t trackLength = ctProp * sqrt(R0Beta2 + z0Beta*z0Beta);
+                                        candidate->TrackLength = trackLength;
 
-			// Set the track length and use it to do a simple pre-sort of track candidates,
-			// so that the charged hardron output array doesn't get filled with a bunch of invisible tracks
-			{
-				const Double_t trackLength = ctProp * sqrt(R0Beta2 + z0Beta*z0Beta);
-				candidate->TrackLength = trackLength;
+                                        if(q not_eq 0.) // Charged particles, add to tracked particle output arrays
+                                        {
+                                                Int_t absPID = abs(candidate->PID);
 
-				if(q not_eq 0.) // Charged particles, add to tracked particle output arrays
-				{
-					Int_t absPID = abs(candidate->PID);
+                                                if(absPID == 13) // Always add muons regardless of track length
+                                                {
+                                                        // Even if they were created in last mm of tracker, they still might show up in the muon chamber
+                                                        fMuonOutputArray->Add(candidate);
+                                                }
+                                                else if(trackLength >= fMinTrackLength) // Add other particles only with sufficient track length
+                                                {
+                                                        if(absPID == 11)
+                                                                fElectronOutputArray->Add(candidate);
+                                                        else
+                                                                fChargedHadronOutputArray->Add(candidate);
+                                                }
+                                        }
+                                }
 
-					if(absPID == 13) // Always add muons regardless of track length
-					{
-						// Even if they were created in last mm of tracker, they still might show up in the muon chamber
-						fMuonOutputArray->Add(candidate);
-					}
-					else if(trackLength >= fMinTrackLength) // Add other particles only with sufficient track length
-					{
-						if(absPID == 11)
-							fElectronOutputArray->Add(candidate);
-						else
-							fChargedHadronOutputArray->Add(candidate);
-					}
-				}
-			}
-
-			if(not decays)
-			{
-				// The candidate punctured the cylinder
-				candidate->Status = 1; // Ensure the particle is now considered final state
-				fOutputArray->Add(candidate); // Only candidates which puncture the cylinder should hit the calorimter
-				NullifyDaughters(candidate); // Terminate its decay chain by nullifying its daughters
-				return true; // Return to the calling instance immedietely
-			}
+                                if(not decays)
+                                {
+                                        // The candidate punctured the cylinder
+                                        candidate->Status = 1; // Ensure the particle is now considered final state
+                                        fOutputArray->Add(candidate); // Only candidates which puncture the cylinder should hit the calorimter
+                                        NullifyDaughters(candidate); // Terminate its decay chain by nullifying its daughters
+                                        return true; // Return to the calling instance immedietely
+                                }
+                        }//End E > 0 propagation
 		}//End propagation
 	}//End temporary variable scope
 
