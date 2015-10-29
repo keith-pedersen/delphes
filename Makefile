@@ -350,6 +350,7 @@ tmp/modules/ModulesDict.$(SrcSuf): \
 	modules/Weighter.h \
 	modules/Hector.h \
 	modules/HighPtBTagger.h \
+	modules/BoostedBTagger.h \
 	modules/LHCOWriterDirect.h \
 	modules/PropagatorAndPixelTracker.h \
 	modules/PixelPicture.h \
@@ -644,6 +645,10 @@ tmp/modules/HighPtBTagger.$(ObjSuf): \
 	external/fastjet/PseudoJet.hh \
 	external/fastjet/JetDefinition.hh \
 	external/fastjet/ClusterSequence.hh
+tmp/modules/BoostedBTagger.$(ObjSuf): \
+	modules/BoostedBTagger.$(SrcSuf) \
+	modules/BoostedBTagger.h \
+	classes/DelphesClasses.h
 tmp/modules/LHCOWriterDirect.$(ObjSuf): \
 	modules/LHCOWriterDirect.$(SrcSuf) \
 	modules/LHCOWriterDirect.h \
@@ -953,6 +958,7 @@ DELPHES_OBJ +=  \
 	tmp/modules/EnergySmearing.$(ObjSuf) \
 	tmp/modules/ExampleModule.$(ObjSuf) \
 	tmp/modules/HighPtBTagger.$(ObjSuf) \
+	tmp/modules/BoostedBTagger.$(ObjSuf) \
 	tmp/modules/LHCOWriterDirect.$(ObjSuf) \
 	tmp/modules/PropagatorAndPixelTracker.$(ObjSuf) \
 	tmp/modules/PixelPicture.$(ObjSuf) \
@@ -1648,6 +1654,10 @@ modules/ExampleModule.h: \
 	@touch $@
 
 modules/HighPtBTagger.h: \
+	classes/DelphesModule.h
+	@touch $@
+	
+modules/BoostedBTagger.h: \
 	classes/DelphesModule.h
 	@touch $@
 

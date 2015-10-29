@@ -171,6 +171,7 @@ void HighPtBTagger::Process()
 	Candidate* jet;
 	fItJetInputArray->Reset();
 
+        // Here we assume that the jet's have already been sorted by pT (by FastJetFinder, which calls sorted_by_pt on the clustered list)
 	Int_t jetRank = 0;
 
 	while((jet = static_cast<Candidate*>(fItJetInputArray->Next())) and (++jetRank <= fMaxJetRank))

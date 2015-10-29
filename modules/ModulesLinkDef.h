@@ -67,6 +67,7 @@
 #include "modules/PixelPicture.h"
 #include "modules/LHCOWriterDirect.h"
 #include "modules/HighPtBTagger.h"
+#include "modules/BoostedBTagger.h"
 
 #ifdef __CINT__
 
@@ -116,5 +117,6 @@
 #pragma link C++ class PixelPicture+;
 #pragma link C++ class LHCOWriterDirect+;
 #pragma link C++ class HighPtBTagger+;
+#pragma link C++ class BoostedBTagger+;
 
 #endif
