@@ -59,6 +59,7 @@
 #include "modules/Weighter.h"
 #include "modules/Hector.h"
 #include "modules/JetFlavorAssociation.h"
+#include "modules/JetFakeParticle.h"
 #include "modules/ExampleModule.h"
 
 //KDP modules
@@ -109,6 +110,7 @@
 #pragma link C++ class Weighter+;
 #pragma link C++ class Hector+;
 #pragma link C++ class JetFlavorAssociation+;
+#pragma link C++ class JetFakeParticle+;
 #pragma link C++ class ExampleModule+;
 
 //KDP modules
