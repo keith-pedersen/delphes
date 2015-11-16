@@ -355,6 +355,7 @@ tmp/modules/ModulesDict.$(SrcSuf): \
 	modules/PixelPicture.h \
 	modules/AllParticlePropagator.h \
 	modules/JetFlavorAssociation.h \
+	modules/JetFakeParticle.h \
 	modules/ExampleModule.h
 ModulesDict$(PcmSuf): \
 	tmp/modules/ModulesDict$(PcmSuf) \
@@ -704,6 +705,15 @@ tmp/modules/Isolation.$(ObjSuf): \
 	external/ExRootAnalysis/ExRootResult.h \
 	external/ExRootAnalysis/ExRootFilter.h \
 	external/ExRootAnalysis/ExRootClassifier.h
+tmp/modules/JetFakeParticle.$(ObjSuf): \
+	modules/JetFakeParticle.$(SrcSuf) \
+	modules/JetFakeParticle.h \
+	classes/DelphesClasses.h \
+	classes/DelphesFactory.h \
+	classes/DelphesFormula.h \
+	external/ExRootAnalysis/ExRootResult.h \
+	external/ExRootAnalysis/ExRootFilter.h \
+	external/ExRootAnalysis/ExRootClassifier.h
 tmp/modules/JetFlavorAssociation.$(ObjSuf): \
 	modules/JetFlavorAssociation.$(SrcSuf) \
 	modules/JetFlavorAssociation.h \
@@ -960,6 +970,7 @@ DELPHES_OBJ +=  \
 	tmp/modules/IdentificationMap.$(ObjSuf) \
 	tmp/modules/ImpactParameterSmearing.$(ObjSuf) \
 	tmp/modules/Isolation.$(ObjSuf) \
+	tmp/modules/JetFakeParticle.$(ObjSuf) \
 	tmp/modules/JetFlavorAssociation.$(ObjSuf) \
 	tmp/modules/JetPileUpSubtractor.$(ObjSuf) \
 	tmp/modules/LeptonDressing.$(ObjSuf) \
@@ -1148,20 +1159,22 @@ tmp/external/fastjet/TilingExtent.$(ObjSuf): \
 tmp/external/fastjet/Voronoi.$(ObjSuf): \
 	external/fastjet/Voronoi.$(SrcSuf) \
 	external/fastjet/internal/Voronoi.hh
-tmp/external/fastjet/contribs/Nsubjettiness/AxesFinder.$(ObjSuf): \
-	external/fastjet/contribs/Nsubjettiness/AxesFinder.$(SrcSuf)
-tmp/external/fastjet/contribs/Nsubjettiness/MeasureFunction.$(ObjSuf): \
-	external/fastjet/contribs/Nsubjettiness/MeasureFunction.$(SrcSuf)
+tmp/external/fastjet/contribs/Nsubjettiness/AxesDefinition.$(ObjSuf): \
+	external/fastjet/contribs/Nsubjettiness/AxesDefinition.$(SrcSuf)
+tmp/external/fastjet/contribs/Nsubjettiness/ExtraRecombiners.$(ObjSuf): \
+	external/fastjet/contribs/Nsubjettiness/ExtraRecombiners.$(SrcSuf)
+tmp/external/fastjet/contribs/Nsubjettiness/MeasureDefinition.$(ObjSuf): \
+	external/fastjet/contribs/Nsubjettiness/MeasureDefinition.$(SrcSuf)
 tmp/external/fastjet/contribs/Nsubjettiness/Njettiness.$(ObjSuf): \
 	external/fastjet/contribs/Nsubjettiness/Njettiness.$(SrcSuf)
-tmp/external/fastjet/contribs/Nsubjettiness/NjettinessDefinition.$(ObjSuf): \
-	external/fastjet/contribs/Nsubjettiness/NjettinessDefinition.$(SrcSuf)
 tmp/external/fastjet/contribs/Nsubjettiness/NjettinessPlugin.$(ObjSuf): \
 	external/fastjet/contribs/Nsubjettiness/NjettinessPlugin.$(SrcSuf)
 tmp/external/fastjet/contribs/Nsubjettiness/Nsubjettiness.$(ObjSuf): \
 	external/fastjet/contribs/Nsubjettiness/Nsubjettiness.$(SrcSuf)
-tmp/external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.$(ObjSuf): \
-	external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.$(SrcSuf)
+tmp/external/fastjet/contribs/Nsubjettiness/TauComponents.$(ObjSuf): \
+	external/fastjet/contribs/Nsubjettiness/TauComponents.$(SrcSuf)
+tmp/external/fastjet/contribs/Nsubjettiness/XConePlugin.$(ObjSuf): \
+	external/fastjet/contribs/Nsubjettiness/XConePlugin.$(SrcSuf)
 tmp/external/fastjet/contribs/RecursiveTools/ModifiedMassDropTagger.$(ObjSuf): \
 	external/fastjet/contribs/RecursiveTools/ModifiedMassDropTagger.$(SrcSuf) \
 	external/fastjet/JetDefinition.hh \
@@ -1307,7 +1320,7 @@ tmp/modules/FastJetFinder.$(ObjSuf): \
 	external/fastjet/contribs/Nsubjettiness/Nsubjettiness.hh \
 	external/fastjet/contribs/Nsubjettiness/Njettiness.hh \
 	external/fastjet/contribs/Nsubjettiness/NjettinessPlugin.hh \
-	external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.hh \
+	external/fastjet/contribs/Nsubjettiness/ExtraRecombiners.hh \
 	external/fastjet/tools/Filter.hh \
 	external/fastjet/tools/Pruner.hh \
 	external/fastjet/contribs/RecursiveTools/SoftDrop.hh
@@ -1333,8 +1346,7 @@ tmp/modules/FastJetGridMedianEstimator.$(ObjSuf): \
 	external/fastjet/plugins/CDFCones/fastjet/CDFJetCluPlugin.hh \
 	external/fastjet/contribs/Nsubjettiness/Nsubjettiness.hh \
 	external/fastjet/contribs/Nsubjettiness/Njettiness.hh \
-	external/fastjet/contribs/Nsubjettiness/NjettinessPlugin.hh \
-	external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.hh
+	external/fastjet/contribs/Nsubjettiness/NjettinessPlugin.hh
 tmp/modules/RunPUPPI.$(ObjSuf): \
 	modules/RunPUPPI.$(SrcSuf) \
 	modules/RunPUPPI.h \
@@ -1386,13 +1398,14 @@ FASTJET_OBJ +=  \
 	tmp/external/fastjet/Selector.$(ObjSuf) \
 	tmp/external/fastjet/TilingExtent.$(ObjSuf) \
 	tmp/external/fastjet/Voronoi.$(ObjSuf) \
-	tmp/external/fastjet/contribs/Nsubjettiness/AxesFinder.$(ObjSuf) \
-	tmp/external/fastjet/contribs/Nsubjettiness/MeasureFunction.$(ObjSuf) \
+	tmp/external/fastjet/contribs/Nsubjettiness/AxesDefinition.$(ObjSuf) \
+	tmp/external/fastjet/contribs/Nsubjettiness/ExtraRecombiners.$(ObjSuf) \
+	tmp/external/fastjet/contribs/Nsubjettiness/MeasureDefinition.$(ObjSuf) \
 	tmp/external/fastjet/contribs/Nsubjettiness/Njettiness.$(ObjSuf) \
-	tmp/external/fastjet/contribs/Nsubjettiness/NjettinessDefinition.$(ObjSuf) \
 	tmp/external/fastjet/contribs/Nsubjettiness/NjettinessPlugin.$(ObjSuf) \
 	tmp/external/fastjet/contribs/Nsubjettiness/Nsubjettiness.$(ObjSuf) \
-	tmp/external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.$(ObjSuf) \
+	tmp/external/fastjet/contribs/Nsubjettiness/TauComponents.$(ObjSuf) \
+	tmp/external/fastjet/contribs/Nsubjettiness/XConePlugin.$(ObjSuf) \
 	tmp/external/fastjet/contribs/RecursiveTools/ModifiedMassDropTagger.$(ObjSuf) \
 	tmp/external/fastjet/contribs/RecursiveTools/Recluster.$(ObjSuf) \
 	tmp/external/fastjet/contribs/RecursiveTools/RecursiveSymmetryCutBase.$(ObjSuf) \
@@ -1742,6 +1755,10 @@ external/fastjet/ClusterSequenceArea.hh: \
 	external/fastjet/AreaDefinition.hh
 	@touch $@
 
+modules/JetFakeParticle.h: \
+	classes/DelphesModule.h
+	@touch $@
+
 external/fastjet/ClusterSequence1GhostPassiveArea.hh: \
 	external/fastjet/PseudoJet.hh \
 	external/fastjet/ClusterSequenceAreaBase.hh \
@@ -1760,6 +1777,11 @@ external/fastjet/RectangularGrid.hh: \
 
 modules/PileUpMerger.h: \
 	classes/DelphesModule.h
+	@touch $@
+
+external/fastjet/contribs/Nsubjettiness/ExtraRecombiners.hh: \
+	external/fastjet/PseudoJet.hh \
+	external/fastjet/JetDefinition.hh
 	@touch $@
 
 display/DelphesBranchElement.h: \
@@ -1911,11 +1933,6 @@ external/PUPPI/puppiCleanContainer.hh: \
 
 modules/BTagging.h: \
 	classes/DelphesModule.h
-	@touch $@
-
-external/fastjet/contribs/Nsubjettiness/WinnerTakeAllRecombiner.hh: \
-	external/fastjet/PseudoJet.hh \
-	external/fastjet/JetDefinition.hh
 	@touch $@
 
 modules/Hector.h: \

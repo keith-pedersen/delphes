@@ -12,7 +12,7 @@ set ExecutionPath {
   ParticlePropagator
 
   ChargedHadronMomentumSmearing
-  ElectronEnergySmearing
+  ElectronMomentumSmearing
   MuonMomentumSmearing
 
   TrackMerger
@@ -110,20 +110,19 @@ module MomentumSmearing ChargedHadronMomentumSmearing {
   set ResolutionFormula {(eta > 2.0  && eta <= 5.0)      * (pt > 0.5) * (0.005)}
 }
 
-#################################
-# Energy resolution for electrons
-#################################
+###################################
+# Momentum resolution for electrons
+###################################
 
-module EnergySmearing ElectronEnergySmearing {
+module MomentumSmearing ElectronMomentumSmearing {
   set InputArray ParticlePropagator/electrons
   set OutputArray electrons
 
   # set ResolutionFormula {resolution formula as a function of eta and energy}
 
   # resolution formula for electrons
-  set ResolutionFormula { (eta > 2.0  && eta <= 5.0) * (energy > 0.1   && energy <= 8.0) * (energy*0.05) +
-                          (eta > 2.0  && eta <= 5.0) * (energy > 8.0)                    *  sqrt(energy^2*0.015^2 + energy*0.10^2)}
-  }
+  set ResolutionFormula {(eta > 2.0  && eta <= 5.0)      * (pt > 0.5)* (0.005)}
+}
 
 ###############################
 # Momentum resolution for muons
@@ -145,7 +144,7 @@ module MomentumSmearing MuonMomentumSmearing {
 module Merger TrackMerger {
 # add InputArray InputArray
   add InputArray ChargedHadronMomentumSmearing/chargedHadrons
-  add InputArray ElectronEnergySmearing/electrons
+  add InputArray ElectronMomentumSmearing/electrons
   add InputArray MuonMomentumSmearing/muons
   set OutputArray tracks
 }
@@ -269,6 +268,7 @@ module SimpleCalorimeter ECal {
   set TrackInputArray IdentificationMap/tracks
 
   set TowerOutputArray ecalTowers
+  set EFlowTrackOutputArray eflowTracks
   set EFlowTowerOutputArray eflowPhotons
 
   set IsEcal true
@@ -348,9 +348,10 @@ module SimpleCalorimeter ECal {
 
 module SimpleCalorimeter HCal {
   set ParticleInputArray ParticlePropagator/stableParticles
-  set TrackInputArray IdentificationMap/tracks
+  set TrackInputArray ECal/eflowTracks
 
   set TowerOutputArray hcalTowers
+  set EFlowTrackOutputArray eflowTracks
   set EFlowTowerOutputArray eflowNeutralHadrons
 
   set IsEcal false 
@@ -429,7 +430,7 @@ module TreeWriter TreeWriter {
 
   add Branch Delphes/allParticles Particle GenParticle
 
-  add Branch IdentificationMap/tracks Track Track
+  add Branch HCal/eflowTracks Track Track
   add Branch HCal/eflowNeutralHadrons NeutralHadron Tower
   add Branch ECal/eflowPhotons Photon Photon
 

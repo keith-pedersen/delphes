@@ -16,31 +16,31 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-//------------------------------------------------------------------------------
+#ifndef JetFakeParticle_h
+#define JetFakeParticle_h
 
-#ifndef PdgCodeFilter_h
-#define PdgCodeFilter_h
 
-/** \class PdgCodeFilter
+/** \class JetFakeParticle
  *
- *  Removes particles with specific PDG codes
+ *  Converts jet into particle with some PID,
+ *  according to parametrized probability.
  *
- *  \author M. Selvaggi
+ *  \author M. Selvaggi - UCL, Louvain-la-Neuve
  *
  */
 
 #include "classes/DelphesModule.h"
-#include <vector>
 
 class TIterator;
 class TObjArray;
+class DelphesFormula;
 
-class PdgCodeFilter: public DelphesModule
+class JetFakeParticle: public DelphesModule
 {
 public:
 
-  PdgCodeFilter();
-  ~PdgCodeFilter();
+  JetFakeParticle();
+  ~JetFakeParticle();
 
   void Init();
   void Process();
@@ -48,20 +48,21 @@ public:
 
 private:
 
-  Double_t fPTMin; //!
-  Bool_t fInvert; //!
-  Bool_t fRequireStatus; //!
-  Int_t fStatus; //!
-
-  std::vector<Int_t> fPdgCodes;
+  #if !defined(__CINT__) && !defined(__CLING__)
+  typedef std::map< Int_t, DelphesFormula * > TFakeMap; //!
+  TFakeMap fEfficiencyMap;
+  #endif
 
   TIterator *fItInputArray; //!
 
   const TObjArray *fInputArray; //!
 
-  TObjArray *fOutputArray; //!
+  TObjArray *fElectronOutputArray; //!
+  TObjArray *fMuonOutputArray; //!
+  TObjArray *fPhotonOutputArray; //!
+  TObjArray *fJetOutputArray; //!
 
-  ClassDef(PdgCodeFilter, 1)
+  ClassDef(JetFakeParticle, 1)
 };
 
 #endif

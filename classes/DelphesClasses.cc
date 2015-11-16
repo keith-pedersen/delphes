@@ -135,6 +135,7 @@ Candidate::Candidate() :
   Position(0.0, 0.0, 0.0, 0.0),
   Area(0.0, 0.0, 0.0, 0.0),
   Dxy(0), SDxy(0), Xd(0), Yd(0), Zd(0),
+  TrackResolution(0),
   NCharged(0),
   NNeutrals(0),
   Beta(0),
@@ -286,7 +287,7 @@ void Candidate::Copy(TObject &obj) const
   object.Xd = Xd;
   object.Yd = Yd;
   object.Zd = Zd;
-
+  object.TrackResolution = TrackResolution;
   object.NCharged = NCharged;
   object.NNeutrals = NNeutrals;
   object.Beta = Beta;
@@ -390,6 +391,7 @@ void Candidate::Clear(Option_t* option)
   Xd = 0.0;
   Yd = 0.0;
   Zd = 0.0;
+  TrackResolution = 0.0;
   NCharged = 0;
   NNeutrals = 0;
   Beta = 0.0;
