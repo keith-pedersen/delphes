@@ -323,6 +323,7 @@ tmp/modules/ModulesDict.$(SrcSuf): \
 	modules/UniqueObjectFinder.h \
 	modules/TrackCountingBTagging.h \
 	modules/BTagging.h \
+	modules/MuXboostedBTagger.h \
 	modules/TauTagging.h \
 	modules/TreeWriter.h \
 	modules/Merger.h \
@@ -543,6 +544,11 @@ tmp/modules/BTagging.$(ObjSuf): \
 	classes/DelphesClasses.h \
 	classes/DelphesFactory.h \
 	classes/DelphesFormula.h
+tmp/modules/MuXboostedBTagger.$(ObjSuf): \
+	modules/MuXboostedBTagger.$(SrcSuf) \
+	modules/MuXboostedBTagger.h \
+	classes/DelphesClasses.h \
+	classes/DelphesFactory.h
 tmp/modules/Calorimeter.$(ObjSuf): \
 	modules/Calorimeter.$(SrcSuf) \
 	modules/Calorimeter.h \
@@ -903,6 +909,7 @@ DELPHES_OBJ +=  \
 	tmp/external/Hector/H_VerticalQuadrupole.$(ObjSuf) \
 	tmp/modules/AngularSmearing.$(ObjSuf) \
 	tmp/modules/BTagging.$(ObjSuf) \
+	tmp/modules/MuXboostedBTagger.$(ObjSuf) \
 	tmp/modules/Calorimeter.$(ObjSuf) \
 	tmp/modules/Cloner.$(ObjSuf) \
 	tmp/modules/ConstituentFilter.$(ObjSuf) \
@@ -1857,6 +1864,10 @@ external/PUPPI/puppiCleanContainer.hh: \
 	@touch $@
 
 modules/BTagging.h: \
+	classes/DelphesModule.h
+	@touch $@
+	
+modules/MuXboostedBTagger.h: \
 	classes/DelphesModule.h
 	@touch $@
 
