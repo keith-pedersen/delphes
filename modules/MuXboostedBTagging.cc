@@ -17,24 +17,24 @@
  */
 
 
-/** \class MuXboostedBTagger
+/** \class MuXboostedBTagging
  *
- *  MuXboostedBTagger tags high-pT heavy flavor jets using a muonic tag
+ *  MuXboostedBTagging tags high-pT heavy flavor jets using a muonic tag
  *  (see arXiv:1511.xxxxx for a full discussion of the underlying physics).
- *  Check for updates @ <https://github.com/keith-pedersen/delphes/tree/MuXboostedBTag>
+ *  Check for updates @<https://github.com/keith-pedersen/delphes/tree/MuXboostedBTagging>
  *
  *
- *  One of the crucial features of MuXboostedBTagger is that it
+ *  One of the crucial features of MuXboostedBTagging is that it
  *  ALTERS the pT of tagged jets, which come from semi-leptonic decay
  *  by construction, and thus are always missing neutrino energy.
  *
- *  MuXboostedBTagger accounts for this missing energy by ESTIMATING
+ *  MuXboostedBTagging accounts for this missing energy by ESTIMATING
  *  the neutrino's energy (currently using the simplest choice pNu=pMu,
  *  from the  shared boost). Thus, "taggable" muons are added a second
  *  time to jets that are tagged.
  *
  *  Therefore, in addition to altering the BTag bit of the original jet,
- *  (for which no neutrino estimation is performed), MuXboostedBTagger
+ *  (for which no neutrino estimation is performed), MuXboostedBTagging
  *  also clones the list of jets (adding neutrino energy when they
  *  pass the tag).
  *
@@ -57,7 +57,7 @@
  *
  *  3. Look inside the jet for at least one "taggable" muon (muon pT >= fMinMuonPt).
  *     WARNING: This requires muons to be clustered into jets during
- *     the initial jet clustering; MuXboostedBTagger does not take a
+ *     the initial jet clustering; MuXboostedBTagging does not take a
  *     muon input array.
  *       3a. (ptMu > fMinMuonPt)
  *       3b. After all "taggable" neutrinos are found, ensure that the
@@ -93,7 +93,7 @@
  *
  */
 
-#include "modules/MuXboostedBTagger.h"
+#include "modules/MuXboostedBTagging.h"
 #include "classes/DelphesClasses.h"
 
 #include "TObjArray.h"
@@ -121,18 +121,18 @@ const Double_t PI = acos(-1.);
 
 //------------------------------------------------------------------------------
 
-MuXboostedBTagger::MuXboostedBTagger():
+MuXboostedBTagging::MuXboostedBTagging():
    fAllParticles(0), fCoreDefinition(0), fJetInputArray(0), fItJetInputArray(0), fJetOutputArray(0)
 {}
 
 //------------------------------------------------------------------------------
 
-MuXboostedBTagger::~MuXboostedBTagger()
+MuXboostedBTagging::~MuXboostedBTagging()
 { /* Memory clean-up handled in Finish() */}
 
 //------------------------------------------------------------------------------
 
-void MuXboostedBTagger::Init()
+void MuXboostedBTagging::Init()
 {
    // read parameters
 
@@ -171,7 +171,7 @@ void MuXboostedBTagger::Init()
 
 //------------------------------------------------------------------------------
 
-void MuXboostedBTagger::Finish()
+void MuXboostedBTagging::Finish()
 {
    delete fCoreDefinition;
    delete fItJetInputArray;
@@ -179,7 +179,7 @@ void MuXboostedBTagger::Finish()
 
 //------------------------------------------------------------------------------
 
-void MuXboostedBTagger::Process()
+void MuXboostedBTagging::Process()
 {
    Candidate* originalJet;
    Candidate* cloneJet;
@@ -414,7 +414,7 @@ void MuXboostedBTagger::Process()
                         const fastjet::PseudoJet& muon = internalJets[iMu];
                         // Debugging code
                         if(muon.user_index() not_eq (iMu - numMuons))
-                           throw runtime_error("MuXboostedBTagger: Muon ID Fail!");
+                           throw runtime_error("MuXboostedBTagging: Muon ID Fail!");
 
                         for(auto itCoreCandidate = coreCandidates.begin(); itCoreCandidate not_eq coreCandidates.end(); ++itCoreCandidate)
                         {
@@ -436,7 +436,7 @@ void MuXboostedBTagger::Process()
                      // subjet mass closest to fSubjetMassHypothesis 
                      // (using only the hardest muon)
                      // 
-                     // Please refer to /delphes/doc/MuXboostedBTagger.pdf/Code notes/1
+                     // Please refer to /delphes/doc/MuXboostedBTagging.pdf/Code notes/1
                      // for an explanation of the mass math (i.e. g and y)
 
                      const fastjet::PseudoJet& hardestMuon = reclusterInput[taggableMuons.size()-1];

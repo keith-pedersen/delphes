@@ -62,7 +62,7 @@
 #include "modules/JetFakeParticle.h"
 #include "modules/ExampleModule.h"
 
-#include "modules/MuXboostedBTagger.h"
+#include "modules/MuXboostedBTagging.h"
 #ifdef __CINT__
 
 #pragma link off all globals;
@@ -106,5 +106,5 @@
 #pragma link C++ class JetFakeParticle+;
 #pragma link C++ class ExampleModule+;
 
-#pragma link C++ class MuXboostedBTagger+;
+#pragma link C++ class MuXboostedBTagging+;
 #endif

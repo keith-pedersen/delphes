@@ -14,7 +14,7 @@ ROOT_MAJOR := $(shell $(RC) --version | cut -d'.' -f1)
 SrcSuf = cc
 PcmSuf = _rdict.pcm
 
-CXXFLAGS += $(ROOTCFLAGS) -Wno-write-strings -D_FILE_OFFSET_BITS=64 -DDROP_CGAL -I. -Iexternal -Iexternal/tcl
+CXXFLAGS += $(ROOTCFLAGS) -Wno-write-strings -D_FILE_OFFSET_BITS=64 -DDROP_CGAL -I. -Iexternal -Iexternal/tcl --std=c++0x
 DELPHES_LIBS = $(shell $(RC) --libs) -lEG $(SYSLIBS)
 DISPLAY_LIBS = $(shell $(RC) --evelibs) -lGuiHtml  $(SYSLIBS)
 
@@ -323,7 +323,7 @@ tmp/modules/ModulesDict.$(SrcSuf): \
 	modules/UniqueObjectFinder.h \
 	modules/TrackCountingBTagging.h \
 	modules/BTagging.h \
-	modules/MuXboostedBTagger.h \
+	modules/MuXboostedBTagging.h \
 	modules/TauTagging.h \
 	modules/TreeWriter.h \
 	modules/Merger.h \
@@ -544,9 +544,9 @@ tmp/modules/BTagging.$(ObjSuf): \
 	classes/DelphesClasses.h \
 	classes/DelphesFactory.h \
 	classes/DelphesFormula.h
-tmp/modules/MuXboostedBTagger.$(ObjSuf): \
-	modules/MuXboostedBTagger.$(SrcSuf) \
-	modules/MuXboostedBTagger.h \
+tmp/modules/MuXboostedBTagging.$(ObjSuf): \
+	modules/MuXboostedBTagging.$(SrcSuf) \
+	modules/MuXboostedBTagging.h \
 	classes/DelphesClasses.h \
 	classes/DelphesFactory.h
 tmp/modules/Calorimeter.$(ObjSuf): \
@@ -909,7 +909,7 @@ DELPHES_OBJ +=  \
 	tmp/external/Hector/H_VerticalQuadrupole.$(ObjSuf) \
 	tmp/modules/AngularSmearing.$(ObjSuf) \
 	tmp/modules/BTagging.$(ObjSuf) \
-	tmp/modules/MuXboostedBTagger.$(ObjSuf) \
+	tmp/modules/MuXboostedBTagging.$(ObjSuf) \
 	tmp/modules/Calorimeter.$(ObjSuf) \
 	tmp/modules/Cloner.$(ObjSuf) \
 	tmp/modules/ConstituentFilter.$(ObjSuf) \
@@ -1867,7 +1867,7 @@ modules/BTagging.h: \
 	classes/DelphesModule.h
 	@touch $@
 	
-modules/MuXboostedBTagger.h: \
+modules/MuXboostedBTagging.h: \
 	classes/DelphesModule.h
 	@touch $@
 
