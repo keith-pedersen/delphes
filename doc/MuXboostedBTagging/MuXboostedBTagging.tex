@@ -1,0 +1,193 @@
+\documentclass{article}
+
+\usepackage{listings}
+\usepackage{color}
+\usepackage{cancel}
+
+%\usepackage{graphicx}% Include figure files
+%\usepackage{subfig}
+%\usepackage{wasysym} %wavy symbols (e.g. \apprge)
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+% Set up the listings package for displaying tcl code
+\lstset{frame=tb,
+  language=tcl,
+  morekeywords={module},
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=fixed,
+  basicstyle={\footnotesize\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{mauve},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3,
+  literate=%
+    {0}{{{\color{mauve}0}}}1
+    {1}{{{\color{mauve}1}}}1
+    {2}{{{\color{mauve}2}}}1
+    {3}{{{\color{mauve}3}}}1
+    {4}{{{\color{mauve}4}}}1
+    {5}{{{\color{mauve}5}}}1
+    {6}{{{\color{mauve}6}}}1
+    {7}{{{\color{mauve}7}}}1
+    {8}{{{\color{mauve}8}}}1
+    {9}{{{\color{mauve}9}}}1
+}
+
+\newcommand{\muX}{$\mu_{x}^{}$}
+\newcommand{\muXmodFull}{\texttt{MuXboostedBTagger}}
+\newcommand{\muXmod}{\texttt{MuX}}
+\newcommand{\delphes}{\textsc{Delphes}}
+
+\newcommand{\pT}{p_{T}^{}}
+\newcommand{\MET}{\cancel{E}_{T}^{}}
+
+\newcommand{\pSubjet}[1][] {p_{\mathrm{subjet}}^{#1}}
+\newcommand{\pCore}[1][]   {p_{\mathrm{core}}^{#1}}
+\newcommand{\pCoreV}       {\vec{p}_{\mathrm{core}}^{}}
+\newcommand{\pMu}[1][]     {p_{\mu}^{#1}}
+\newcommand{\pMuV}       {\vec{p}_{\mu}^{}}
+\newcommand{\pNu}[1][]     {p_{\nu_{\mu}}^{#1}}
+
+\newcommand{\mB}             {m_{B}^{}}
+\newcommand{\mCore}[1][]     {m_{\mathrm{core}}^{#1}}
+\newcommand{\ECore}[1][]     {E_{\mathrm{core}}^{#1}}
+\newcommand{\gammaCore}[1][] {\gamma_{\mathrm{core}}^{#1}}
+\newcommand{\EMu}[1][]       {E_{\mu}^{#1}}
+
+\begin{document}
+
+\title{{\muXmod} user guide}
+
+\author{Keith~Pedersen (kpeders1@hawk.iit.edu)}
+
+\date{November 30, 2015}
+
+\maketitle
+
+\begin{abstract}
+This user guide explains how to use the {\muXmod} module for {\delphes}, along with 
+some of its internal kinematic expressions. This guide assumes that the reader has
+read the paper, and understands the basics of the {\muX} tag.
+\end{abstract}
+
+\section{Using the module}
+The {\muXmodFull} module (henceforth frequently abbreviated as {\muXmod})
+is a relatively straightforward extension to the standard {\delphes}
+functionality. Like {\delphes}' native \texttt{BTagging} module, {\muXmod}
+draws from \texttt{JetInputArray}, a list of fully reconstructed/calibrated
+jets (e.g.\ from \texttt{JetEnergyScale}), and only alters their
+\texttt{Candidate::BTag} field. Additionally, to allow {\muXmod} to be used in
+conjunction with \texttt{BTagging}, {\muXmod} allows the user to define
+\emph{which} bit in \texttt{BTag} is set when a jet is tagged (the default is
+bit-3 for {\muXmod}, versus bit-0 for \texttt{BTagging}).
+
+However, unlike \texttt{BTagging},
+{\muXmod} must actually \emph{alter} the jest it tags. This is because the
+{\muX} tag relies on jets undergoing semi-leptonic decay, which systematically
+lack neutrino energy. This requires an additional level of jet energy
+correction, in the form of \textbf{neutrino estimation}. Currently, only the
+simplest estimation is implemented: the associated muon is used as an exact
+proxy for the neutrino ($\pNu=\pMu$), since most of the momentum of both comes
+from their shared boost.
+
+In order to accomadate this neutrino estimation in a \textbf{sensible} way, the
+only field which {\muXmod} can alter on its \texttt{JetInputArray} is \linebreak
+\texttt{Candidate::BTag}. These jets are then cloned, and the neutrino
+estimated jets are sent to the \texttt{JetOutputArray}. Thus, both input/output
+jets contain the same jets, in the same order, with the same
+\texttt{Candidate::BTag} field, and only the difference is that
+jets in \texttt{JetOutputArray} which are \emph{tagged} by {\muX} have their
+\texttt{Candidate::Momentum} field altered to estimate their neutrino(s).
+
+Parallel lists of tagged jets can be iterated through in parallel during
+post-detector analysis code. For exmample, consider an alysis 
+quite useful in an analyses which requires only 1 b-tag. \emph{If} only one jet
+is {\muX} tagged, then the event $\MET$ can be used
+for neutrino estimation instead. However, since the event could also involve
+other sources of $\MET$ (e.g. ), this decision
+should only only be made in post-production --- not inside {\delphes}.
+
+\begin{lstlisting}
+
+module HighPtBTagger HighPtBTagger {
+set JetInputArray JetEnergyScale/jets
+
+set BitNumber            3
+set MaxJetRank           4
+set MinJetPt             135.
+set MinMuonPt            10
+set MinTowerPtRatio      0.05
+set CoreAntiktR          0.04
+set CorePtRatioMin       0.5
+set CoreMassHypothesis   2.0
+set SubjetMassHypothesis 5.3
+set MinFinalMass         0.
+set MaxFinalMass         12.
+set MaxX                 3.0
+
+set BCoreMinBoost        1.0
+}
+\end{lstlisting}
+
+\section{Code notes}
+\subsection{Robust subjet mass}
+We define the subjet of $B$~hadron decay
+%
+\begin{equation}
+\pSubjet=\pCore+\pMu+\pNu,
+\end{equation}
+%
+where the ``core'' is ostensibly a charm hadron. 
+Since the neutrino is not observable, we estimate it using the 
+simplest choice ($\pNu=\pMu$, since most of the momentum comes from
+their shared boost). This gives us an approximate subjet
+%
+\begin{equation}
+\pSubjet\approx\pCore+2\,\pMu.
+\end{equation}
+%
+
+The core is found by reclustering the jet using a much smaller radius 
+parameter. This produces a list of \emph{candidate} cores, of which only
+one is the ``correct'' core; this is found by using the hardest muon in 
+the jet to find the core which produces $\sqrt{\pSubjet[2]}$ closest to 
+$\mB=5.3$~GeV (the mass of a $B$~hadron admixture). 
+However, since $\mCore$ is not accurately measured 
+(from the granularity of the Calorimeter), we must first constrain it to its 
+hypothesized mass under the $B$~hadron decay hypothesis ($\mCore=2$~GeV).
+
+In order to find the core quickly, we don't want to correct the mass 
+of each core candidate before adding the muon. Instead, we can use our
+large cut on muon $\pT$ to treat the muon as massless, then calculate
+the mass of the subjet analytically
+%
+\begin{equation}
+\pSubjet[2]=\mCore[2]+2\,\pCore\cdot\pMu=\mCore[2]+4\,\EMu\ECore(1-\cos(\xi)\sqrt{1-g}),
+\end{equation}
+%
+where $\xi$ is the angle between the muon and the core and $g\equiv\gammaCore[-2]$.
+Using $y=\tan^{2}(\xi)=\left(\frac{\pCoreV\times\pMuV}{\pCoreV\cdot\pMuV}\right)^2$
+and $\cos(\xi)=\frac{1}{\sqrt{1+y}}$ (since $\xi<\pi/2$), this becomes
+%
+\begin{equation}
+\pSubjet[2]\approx\mCore[2]+4\,\EMu\ECore(1-\frac{\sqrt{1-g}}{\sqrt{1+y}}).
+\end{equation}
+%
+
+This expression can be optimized to minimize floating point cancellation,
+(which should be miniscule, but eliminating unnecessary cancellation is a good habit)
+%
+\begin{equation}
+\pSubjet[2]\approx\mCore[2]+4\,\EMu\ECore\frac{g+y}{1+y+\sqrt{1-((g-y)+g\,y)}}.
+\end{equation}
+
+\end{document}

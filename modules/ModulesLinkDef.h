@@ -68,7 +68,7 @@
 #include "modules/PixelPicture.h"
 #include "modules/LHCOWriterDirect.h"
 #include "modules/HighPtBTagger.h"
-#include "modules/MuXboostedBTagger.h"
+#include "modules/MuXboostedBTagging.h"
 
 #ifdef __CINT__
 
@@ -120,5 +120,6 @@
 #pragma link C++ class LHCOWriterDirect+;
 #pragma link C++ class HighPtBTagger+;
 #pragma link C++ class MuXboostedBTagger+;
+#pragma link C++ class MuXboostedBTagging+;
 
 #endif
