@@ -20,73 +20,74 @@
 /** \class MuXboostedBTagging
  *
  *  MuXboostedBTagging tags high-pT heavy flavor jets using a muonic tag
- *  (see arXiv:1511.xxxxx for a full discussion of the underlying physics).
- *  Check for updates @<https://github.com/keith-pedersen/delphes/tree/MuXboostedBTagging>
- *
- *
+ *  --> see [arXiv:1511.xxxxx] for a full discussion of the physics.
+ *  --> see <delphes/doc/MuXboostedBTagging/MuX_UserGuide.pdf> for a quick description of the module
+ *  --> check <https://github.com/keith-pedersen/delphes/tree/MuXboostedBTagging> for updates
+ * 
+ * 
  *  One of the crucial features of MuXboostedBTagging is that it
- *  ALTERS the pT of tagged jets, which come from semi-leptonic decay
+ *  ALTERS the pT of tagged jets, which come from semi-leptonic decay 
  *  by construction, and thus are always missing neutrino energy.
- *
+ * 
  *  MuXboostedBTagging accounts for this missing energy by ESTIMATING
- *  the neutrino's energy (currently using the simplest choice pNu=pMu,
+ *  the neutrino's energy (currently using the simplest choice pNu=pMu, 
  *  from the  shared boost). Thus, "taggable" muons are added a second
  *  time to jets that are tagged.
- *
+ * 
  *  Therefore, in addition to altering the BTag bit of the original jet,
  *  (for which no neutrino estimation is performed), MuXboostedBTagging
- *  also clones the list of jets (adding neutrino energy when they
- *  pass the tag).
+ *  also clones the list of jets (adding neutrino energy when they 
+ *  pass the tag). 
+ * 
  *
- *
- *
+ *  
  *  NOTE: This module gives more accurate light jet fake rates when
- *  used in conjunction with AllParticlePropagator (which simulates the
+ *  used in conjunction with AllParticlePropagator (which simulates the 
  *  initial bending of in-flight Pion/Kaon decays to muons).
+ * 
+ * 
  *
- *
- *
- *  The algorithm
- *
+ *  The algorithm synopsis
+ * 
  *  1. Clone each jet into the output array, regardless of whether it's tagged.
- *
- *  2. Look for jets passing a preliminary pT cut (no less than half
- *     the final cut, since neutrino estimation could potentially
+ * 
+ *  2. Look for jets passing a preliminary pT cut (no less than half 
+ *     the final cut, since neutrino estimation could potentially 
  *     double a jet's pT)
- *       2a. (ptJet > 0.5*fMinJetPt)
- *
- *  3. Look inside the jet for at least one "taggable" muon (muon pT >= fMinMuonPt).
- *     WARNING: This requires muons to be clustered into jets during
+ *       2a. (ptJet >= 0.5*fMinJetPt)
+ * 
+ *  3. Look inside the jet for at least one "taggable" muon (muon pT >= fMinMuonPt). 
+ *     WARNING: This requires muons to be clustered into jets during 
  *     the initial jet clustering; MuXboostedBTagging does not take a
  *     muon input array.
- *       3a. (ptMu > fMinMuonPt)
- *       3b. After all "taggable" neutrinos are found, ensure that the
- *           final jet pT (with neutrino estimation) will pass the pT cut
- *           (ptJet [with neutrinos] > fMinJetPt).
- *
+ *       3a. (ptMu >= fMinMuonPt)
+ *       3b. After all "taggable" neutrinos are found, ensure that the 
+ *           final jet pT (with neutrino estimation) can possibly pass 
+ *           the pT cut (ptJet [with neutrinos] > fMinJetPt).
+ * 
  *  4. Reconstruct the subjet of the semi-leptonic decay
- *       4a. Recluster the jet (discarding towers whose pT ratio, to the
- *           original jet pT, is less than fMinTowerPtRatio), using
+ *       4a. Recluster the jet (discarding towers whose pT ratio, to the 
+ *           original jet pT, is less than fMinTowerPtRatio), using 
  *           anti-kt with radius fCoreAntiktR.
- *       4b. The mass of the core is poorly measured, constrain it
+ *       4b. The mass of the core is poorly measured, constrain it 
  *           to fCoreMassHypothesis.
- *       4c. Search through the list of candidate cores and, if their
+ *       4c. Search through the list of candidate cores and, if their 
  *           boost is greater than fCoreMinBoost, calculate the mass
  *           of the resulting subjet (using only the hardest muon).
  *       4d. The "correct" core is the one which produces mSubjet closest
  *           to fSubjetMassHypothesis.
- *
+ * 
  *  5. Calculate x
- *       5a. x = tan(thetaLab)*Esubjet/mSubjet. However, restrict mSubjet
- *           to be no larger than fMaxSubjetMass (in case of a
+ *       5a. x = tan(thetaLab)*Esubjet/mSubjet. However, restrict mSubjet 
+ *           to be no larger than fMaxSubjetMass (in case of a 
  *           poorly reconstructed subjet).
- *
+ * 
  *  6. Calculate fSubjet
  *       6a. fSubjet = pTsubjet/pTjet (account for neutrino estimation).
- *
+ * 
  *  7. Tag the jet
- *       7a. If (x <= fMaxX) and (f >= fSubjet), tag both the original jet and
- *           the clone (using fBitNumber in the BTag field).
+ *       7a. If (x <= fMaxX) and (f >= fSubjet), tag both the original jet and 
+ *           the clone (using fBitNumber in the BTag field). 
  *       7b. If the jet is tagged, add the neutrino pT to the clone.
  *
  *  \author K. Pedersen - Illinois Institute of Technology
@@ -98,11 +99,6 @@
 
 #include "TObjArray.h"
 #include "TLorentzVector.h"
-//~ #include "TDirectory.h"
-//~ #include "TFile.h"
-//~ #include "TH1I.h"
-//~ #include "TH1F.h"
-//~ #include "TH2F.h"
 
 #include "fastjet/PseudoJet.hh"
 #include "fastjet/JetDefinition.hh"
@@ -110,10 +106,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <stdexcept>
-//#include <iostream>
-//#include <iomanip>
-//#include <sstream>
+//#include <stdexcept>
 
 using namespace std;
 
@@ -205,9 +198,10 @@ void MuXboostedBTagging::Process()
          std::vector<Candidate const*> everythingElse;
          everythingElse.reserve(32);
          
-         Double_t neutrinoPt = 0.;
+         Double_t neutrinoMaxPt = 0.;
 
          // Fill taggableMuons & everythingElse 
+         // (CHECKED 11.18.2015)
          {
             TIter itJetConstituents(cloneJet->GetCandidates());
             Candidate* constituent;
@@ -220,9 +214,9 @@ void MuXboostedBTagging::Process()
                   const Double_t muonPt = (constituent->Momentum).Pt();
                   if(muonPt >= fMinMuonPt)
                   {
-                     neutrinoPt += muonPt;
+                     neutrinoMaxPt += muonPt;
                      taggableMuons.push_back(constituent);
-                     continue;
+                     continue; // Add to everythingElse unless all conditions are met
                   }
                }
                everythingElse.push_back(constituent);
@@ -230,9 +224,10 @@ void MuXboostedBTagging::Process()
          }
          
          // Ensure we have at least one taggable muon and possibly enough pT after neutrino estimation
-         if((not taggableMuons.empty()) and (originalJetPt + neutrinoPt >= fMinJetPt))
+         if((not taggableMuons.empty()) and (originalJetPt + neutrinoMaxPt >= fMinJetPt))
          {
-            // Sort muons low to high
+            // Sort muons low to high 
+            // (CHECKED 11.18.2015)
             {
                // Sometimes there will be more than 1 muon. In those cases, we will
                // assume that the muons were emitted from highest to lowest pt.
@@ -348,9 +343,10 @@ void MuXboostedBTagging::Process()
             // Now we find the jet's core by reculstering its jet constituents
             vector<fastjet::PseudoJet> reclusterInput;
 
-            // Add the taggable muons to the reclusterInput
+            // Add the taggable muons to the reclusterInput 
+            // (CHECKED 11.18.2015)
             {
-               // Give them a negative user_index ( user_index = index in taggableMuons - taggableMuons.size() )
+               // Give muons a negative user_index ( user_index = index in taggableMuons - taggableMuons.size() )
                // This makes them easy to find after the reclustering.
 
                const int numMuons = taggableMuons.size();
@@ -362,7 +358,8 @@ void MuXboostedBTagging::Process()
                }
             }
 
-            // Add jet constituents (all tracks, but only towers passing pt cut)
+            // Add jet constituents (all tracks, but only towers passing pt cut) 
+            // (CHECKED 11.18.2015)
             {
                // Use all tracks, but only use towers/eFlowNeutrals (charge == 0) if they are above the relative pt threshold
                // This is because the angular resolution of towers is much poorer, and we don't
@@ -374,11 +371,12 @@ void MuXboostedBTagging::Process()
                {
                   Candidate const* const constituent = everythingElse[iEverythingElse];
 
-                  // neutral charge ==> tower (an assumption)
-                  if((constituent->Charge == 0) && ((constituent->Momentum).Pt() < minTowerPt))
-                     continue;
-
-                  reclusterInput.emplace_back((constituent->Momentum).Px(), (constituent->Momentum).Py(), (constituent->Momentum).Pz(), (constituent->Momentum).E());
+                  // neutral charge ==> tower (an ASSUMPTION)
+                  if((constituent->Charge == 0) and ((constituent->Momentum).Pt() < minTowerPt))
+                     continue; // Don't use
+                  
+                  const TLorentzVector& constituentMomentum = constituent->Momentum;
+                  reclusterInput.emplace_back(constituentMomentum.Px(), constituentMomentum.Py(), constituentMomentum.Pz(), constituentMomentum.E());
                   reclusterInput.back().set_user_index(iEverythingElse);
                }
             }
@@ -400,37 +398,39 @@ void MuXboostedBTagging::Process()
                   fastjet::PseudoJet core;
                   TLorentzVector p4core, p4neutrinoCorrection;
                   
-                  // Get fastjets internal jets (because fastjet only has const access to our input jets,
-                  // so they have no internal clustering information, which we'll need to use).
-                  // The documentation does not specify that the input jets are the first
-                  // members of list returned by jets(), so we'll have to assume that
-                  // this is the case (this assumption was tested a lot during debug)
+                  // Get fastjets internal jets (because fastjet only has const access to our input PseudoJets,
+                  // so the inputs have no internal clustering information, which we'll need to use).
+                  // The first internal PseduoJets are the input PseudoJets, of which the 
+                  // taggable muons are first (because we added them first)
                   const std::vector<fastjet::PseudoJet>& internalJets = recluster.jets();
 
-                  // Remove all taggable muons from the core candidates, then sort by pt
+                  // Remove all taggable muons from the core candidates, then sort by pt 
+                  // (CHECKED 11.18.2015)
                   {
-                     const int numMuons = taggableMuons.size();
-                     for(int iMu = 0; iMu < numMuons; ++iMu)
+                     for(unsigned int iMu = 0; iMu < taggableMuons.size(); ++iMu)
                      {
                         const fastjet::PseudoJet& muon = internalJets[iMu];
-                        // Debugging code
-                        if(muon.user_index() not_eq (iMu - numMuons))
-                           throw runtime_error("MuXboostedBTagging: Muon ID Fail!");
+                        // Debugging code (to make sure the muons are actually first)
+                        // if(muon.user_index() not_eq (iMu - numMuons))
+                        //    throw runtime_error("MuXboostedBTagging: Muon ID Fail!");
 
                         for(auto itCoreCandidate = coreCandidates.begin(); itCoreCandidate not_eq coreCandidates.end(); ++itCoreCandidate)
                         {
+                           // If a taggable muon is inside a core candidate,
+                           // remove the muon p4
                            if(muon.is_inside(*itCoreCandidate))
                            {
                               *itCoreCandidate -= muon;
-                              break; // out of inner loop - the muon can only be in one candidate at a time
+                              break; // out of inner loop - the muon can only be in one core candidate at a time
                            }
                         }
                      }
                      
+                     // Sort the core candidates by pT (highest to lowest)
                      coreCandidates = fastjet::sorted_by_pt(coreCandidates);
                   }
 
-                  // Find the core 
+                  // Find the core (CHECKED 11.18.2015)
                   // WARNING: only the hardest muon is used to find the core
                   {
                      // Here me must find the "correct" core by finding the
@@ -442,29 +442,28 @@ void MuXboostedBTagging::Process()
 
                      const fastjet::PseudoJet& hardestMuon = reclusterInput[taggableMuons.size()-1];
                      
-                     Double_t minDeltaMass = 9e9;
+                     Double_t minDeltaMass = 1024.;
                      auto itCore = coreCandidates.begin(); // Default to hardest core
 
                      for(auto itCoreCandidate = coreCandidates.begin(); itCoreCandidate not_eq coreCandidates.end(); ++itCoreCandidate)
                      {
                         const Double_t g = Squared(fCoreMassHypothesis / itCoreCandidate->E());
                         // Make sure we still have sufficient boost after muon subtraction
-                        if(g*fCoreMinBoostSquared > 1.)
-                           break; // Since we're sorted by pt, the next core candidate is also too weak
-
-                        const Double_t y = Tan2(*itCoreCandidate, hardestMuon);
-
-                        // The core has the mass closest to fSubjetMassHypothesis
-                        const Double_t deltaMass = abs(sqrt(fCoreMassHypothesisSquared + 
-                           (4. * hardestMuon.E() * itCoreCandidate->E() * (g + y)) / (1. + y + sqrt(1. - ((g - y) + g*y)))) - fSubjetMassHypothesis);
-
-                        if(deltaMass < minDeltaMass)
+                        if(g*fCoreMinBoostSquared <= 1.)
                         {
-                           minDeltaMass = deltaMass;
-                           itCore = itCoreCandidate;
+                           const Double_t y = Tan2(*itCoreCandidate, hardestMuon);
+
+                           // The core has the mass closest to fSubjetMassHypothesis
+                           const Double_t deltaMass = abs(sqrt(fCoreMassHypothesisSquared + 
+                              (4. * hardestMuon.E() * itCoreCandidate->E() * (g + y)) / (1. + y + sqrt(1. - ((g - y) + g*y)))) - fSubjetMassHypothesis);
+
+                           if(deltaMass < minDeltaMass)
+                           {
+                              minDeltaMass = deltaMass;
+                              itCore = itCoreCandidate;
+                           }
                         }
                      }
-                     
                      core = *itCore;
                   }
 
@@ -473,7 +472,8 @@ void MuXboostedBTagging::Process()
                   // will now be handled by p4core (i.e. core will no longer have an 
                   // accurate momentum).
                   
-                  // Fix core mass to fCoreMassHypothesis
+                  // Fix core mass to fCoreMassHypothesis 
+                  // (CHECKED 11.18.2015)
                   {                    
                      // The current mass depends more on the granularity of the CAL more than anything else
                      // To fix the mass, We need to scale the momentum of the core (but not the energy)
@@ -481,12 +481,13 @@ void MuXboostedBTagging::Process()
                      p4core.SetPxPyPzE(momentumScale*core.px(), momentumScale*core.py(), momentumScale*core.pz(), core.E());
                   }
 
-                  // Reconstruct the subjet, measure x, find the smallest value
+                  // Reconstruct the subjet, measure x, find the smallest value (CHECKED 11.18.2015)
                   {
                      // Keep track of the smallest x for any muon
                      Double_t minX = 1024.; // Large enough, simple significand
                      
                      // Iterate through each muon, add it to the core, and calculate the resulting boost invariant
+                     // (CHECKED 11.18.2015)
                      for(auto itMuon = taggableMuons.begin(); itMuon not_eq taggableMuons.end(); ++itMuon)
                      {
                         const TLorentzVector& muonP4 = (*itMuon)->Momentum;
@@ -515,6 +516,7 @@ void MuXboostedBTagging::Process()
                      const Double_t finalJetPt = originalJetPt + p4neutrinoCorrection.Pt();
 
                      // Re-check pt now that we've fully estimated neutrinos
+                     // (CHECKED 11.18.2015)
                      if(finalJetPt >= fMinJetPt)
                      {
                         // Ensure we had a boosted muon emission from
@@ -572,6 +574,7 @@ inline Double_t Squared(const Double_t arg)
 //------------------------------------------------------------------------------
 
 // Find the tan(theta)**2 between two PseudoJets by calculating (p3>_1 x p3>_2)**2 / (p3>_1 . p3>_2)**2
+//(CHECKED 11.18.2015)
 Double_t Tan2(const fastjet::PseudoJet& one, const fastjet::PseudoJet& two)
 {
    // This is more accurate than an alternate form 

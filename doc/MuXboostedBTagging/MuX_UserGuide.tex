@@ -77,7 +77,8 @@
 \begin{abstract}
 This user guide explains the function of the {\muXmodFull} module for
 {\delphes}. This guide assumes that the reader has already read the
-paper~\cite{Pedersen:MuX}, and understands the basics of the {\muX} tag.
+{\muX} boosted-$b$ tag paper~\cite{Pedersen:MuX}, and understands the
+basics of the {\muX} tag.
 \end{abstract}
 
 \section{{\muXmodFull} basics}
@@ -88,18 +89,19 @@ draws from \texttt{JetInputArray}, a list of fully reconstructed/calibrated
 jets (e.g.\ from \texttt{JetEnergyScale}), and only alters their
 \texttt{Candidate::BTag} bit-flag. Additionally, to allow {\muXmod} to be used
 in conjunction with \texttt{BTagging}, {\muXmod} allows the user to define
-\emph{which} bit in \texttt{BTag} is set when a jet is tagged (the {\muXmod}
+\emph{which bit} in \texttt{BTag} is set when a jet is tagged (the {\muXmod}
 default is bit-3, versus the \texttt{BTagging} default of bit-0).
 
-Because the {\muX} tag relies on jets undergoing semi-leptonic decay, the jets
-it tags systematically lack neutrino energy. This means that {\muXmodFull}
-should perform an additional jet energy correction, in the form of
-\textbf{neutrino estimation}. Currently, only the simplest estimation is
-implemented: the neutrino's associated muon is used as an exact proxy for the
-neutrino ($\pNu=\pMu$), since most of the momentum of both comes from their
-shared boost.
+Because the {\muX} boosted-$b$ tag only works for jets undergoing
+semi-leptonic decay, the jets it tags systematically lack neutrino energy.
+This means that {\muXmodFull} should perform an additional jet energy
+correction, in the form of \textbf{neutrino estimation}. Currently, only the
+simplest estimation is implemented: the neutrino's associated muon is used as
+an exact proxy for the neutrino ($\pNu=\pMu$), since most of the momentum of
+both comes from their shared boost. \emph{A more sophisticated estimate will 
+improve the energy resolution}.
 
-In order to accomodate this procedure in a \emph{sensible} way,
+In order to accommodate this jet energy correction in a \emph{sensible} way,\linebreak
 \texttt{JetInputArray} is cloned into \texttt{JetOutputArray}, and
 only clone jets which are \emph{tagged} by {\muX} have their neutrino(s)
 estimated. Thus, both input/output jets contain the same jets, in the same
@@ -108,34 +110,35 @@ they're tagged by {\muX}, in which case the version in \texttt{JetOutputArray}
 will have a larger \texttt{Candidate::Momentum}.
 
 These parallel lists of tagged jets can be iterated through in parallel during
-post-detector analysis code, giving the user the power to determine how
-neutrinos will be estimated. For exmample, consider a dijet analysis which
-only requires one $b$ tag. \emph{IFF} only one jet is {\muX}-tagged, then the
-event $\MET$ can be used for neutrino estimation (instead of $\pNu=\pMu$).
-However, since the event could also involve other sources of $\MET$, this
+post-detector analysis code, giving the user the power to determine whether 
+they want the original or corrected jet. For example, consider a dijet analysis 
+which only requires a single $b$ tag. \emph{IFF} only one jet is {\muX}-tagged, then 
+the event $\MET$ can be used for neutrino estimation (instead of $\pNu=\pMu$).
+However, since a general process could possess other sources of $\MET$, this
 decision should only only be made in post-analysis, not inside {\delphes}.
 
 \section{Using {\muXmodFull}}
 
 Jets are fed into {\muXmod} and, as outlined above, are tagged in both
 the input and output arrays; however, only the output arrays undergo neutrino
-estimation. Thus, it is incumbant upon the user to write out either/both
-sets of jets (in the \texttt{TreeWriter}), and determine which is used in
+estimation. Thus, it is incumbent upon the user to write out either/both
+sets of jets (using the \texttt{TreeWriter}), and determine which is used in
 post-analysis.
 
 It is extremely important to emphasize that {\muXmod} will only tag jets
-\emph{which already contain muons} (there is no input array for muons). This is
-a deliberate choice, as these semi-leptonic muons are part of the jet, and very
-hard muons will (and should) seed the formation of anti-$k_{T}^{}$ jets. As
-such, the list of detected muons \emph{must} be an input for jet clustering.
+\emph{which already contain muons}. There is no input array for muons! This is
+a deliberate choice, as these semi-leptonic muons are part of the jet, so 
+these muons should participate in jet clustering (and will seed anti-$k_T$ jets.
+As such, the list of detected muons \emph{must} be an input for jet clustering
+if {\muXmod} is to be used.
 
 Since {\muXmodFull} can be used in conjunction with \texttt{BTagging}, the
-\texttt{BTag} field can contain a combination of tags (hence, merely checking
-that it's not 0 is no longer sufficient). To isolate each type of tag, one can
-use bitwise-AND.
+\texttt{BTag} field can contain multiple flagged bits. Hence, \texttt{BTag>0}
+only indicates a jet was tagged by \emph{some} module. To isolate a {\muX} tag,
+one can use bit-wise-AND.
 
 \begin{lstlisting}
-#include "DelphesClasses.h"
+#include "DelphesClasses.h" // "Jet" class is defined here
 ... // More includes
 
 const UInt_t muXbitNumber = 3;
@@ -146,44 +149,44 @@ TClonesArray* jetArray = 0;
 TIterator* itJet = 0;
 Jet* jet = 0;
 
-// Read TTree, link &jetArray, loop over entries (fill jetArray, init. itJet)
-	// Loop over all jets
-	while((jet = static_cast<Jet*>(itJet->Next())))
-	{
-		if((jet->BTag & bTaggingFlag) > 0) {//taggged by BTagging}
-		if((jet->BTag & muXFlag) > 0){//taggged by MuXboostedBTagging}
-	}
+// Read TTree, link &jetArray, loop over entries, GetEntry() (fill jetArray)
+  // Initialize itJet, then use while to loop over all jets 
+  while((jet = static_cast<Jet*>(itJet->Next())))
+  {
+    if((jet->BTag & bTaggingFlag) > 0) {//taggged by BTagging}
+    if((jet->BTag & muXFlag) > 0){//taggged by MuXboostedBTagging}
+  }
 \end{lstlisting}
 %
-This example {\delphes} card that sets each {\muXmod} parameter to its default
+This example {\delphes} card sets each {\muXmod} parameter to its default
 value.
 %
-\lstset{language=tcl, morekeywords={module}}
+\lstset{language=tcl, morekeywords={module}, commentstyle=\color{dkgreen}}
 
 \begin{lstlisting}
 module MuXboostedBTagging MuXboostedBTagging {
-	set JetInputArray JetEnergyScale/jets
-	set JetOutputArray jets
+    set JetInputArray JetEnergyScale/jets
+    set JetOutputArray jets
 
-	# Which bit to activate when a jet is tagged
-		set BitNumber            3
-	# The main cuts in the tag (x_max and f_subjet^min)
-		set MaxX                 3.0
-		set MinCorePtRatio       0.5
-	# Basic kinematic cuts (to define taggable jets and taggable muons)
-		set MinJetPt             300.
-		set MinMuonPt            10.
-	# The core reclustering pT cut on towers
-		set MinTowerPtRatio      0.05
-	# The core reclustering radius
-		set CoreAntiKtR          0.04
-	# The minimum boost of a candidate core (low improves light-jet fake rate)
-		set BCoreMinBoost        1.0
-	# The mass hypotheses
-		set CoreMassHypothesis   2.0
-		set SubjetMassHypothesis 5.3
-	# Maximum reconstructed subjet mass
-		set MaxSubjetMass        12.
+# Which bit to activate when a jet is tagged
+    set BitNumber            3
+# The main cuts in the tag (x_max and f_subjet^min)
+    set MaxX                 3.0
+    set MinCorePtRatio       0.5
+# Basic kinematic cuts (to define taggable jets and taggable muons)
+    set MinJetPt             300.
+    set MinMuonPt            10.
+# The core reclustering pT cut on towers
+    set MinTowerPtRatio      0.05
+# The core reclustering radius
+    set CoreAntiKtR          0.04
+# The minimum boost of a candidate core (low improves light-jet fake rate)
+    set BCoreMinBoost        1.0
+# The mass hypotheses
+    set CoreMassHypothesis   2.0
+    set SubjetMassHypothesis 5.3
+# Maximum reconstructed subjet mass
+    set MaxSubjetMass        12.
 }
 \end{lstlisting}
 
@@ -194,9 +197,9 @@ to the source code, which has been extensively commented.
 \subsection{ECal pointing and standalone muons}
 
 An important feature of the {\muX} paper~\cite{Pedersen:MuX} was its attempt to
-sever its {\muX} taggging predictions from the tracking performance of
-anything but standalone muons (those which only require hits in the muon
-chamber). To obtain the neccessary angular resolution for the core
+sever its {\muX} tagging predictions from the tracking performance of
+anything but ``standalone'' muons (muons which only require hits in the muon
+chamber). To obtain the necessary angular resolution for the core
 reconstruction, a procedure called ``ECal pointing'' was implemented (see the
 paragraph directly before Sec. III-A in~\cite{Pedersen:MuX}).
 
@@ -210,34 +213,34 @@ of in-flight muon production inside the tracking volume (e.g. from
 $\pi^{+}/K^{+}$ decay). Since the {\muX} tag is effectively an angular tag, it
 was important to simulate the bending of the muon's mother. However, {\delphes}'
 \texttt{ParticlePropagator} only propagates/bends ``final-state'' particles in
-the magnetic field; their mothers (at least in \textsc{Pythia}) are propagated
+the magnetic field; their mothers (at least from \textsc{Pythia}) are propagated
 to their decay vertices in a straight line.
 
-This required the activation of in-flight $\pi^{+}/K^{+}$ decay (off by
-default in \textsc{Pythia}) and the development of the
-\texttt{AllParticlePropagator} module to properly handle such decays (which also
-required custom handling of pileup). Since this module needed to alter the
-\texttt{Candidate} class (to store each particle's random, proper lifetime) it
-is not currently distributed with {\muXmodFull}. This means that {\muXmod} will
-mildly \emph{over}-estimate the light jet fake rate (once in-flight
-$\pi^{+}/K^{+}$ decays are turned on), as muons from in-flight decays will
-arrive at slightly tighter angles to the reconstructed cores of their jets.
+Getting these muons required not only the activation of in-flight 
+$\pi^{+}/K^{+}$ decay (off by default in \textsc{Pythia}), but the development 
+of the \texttt{AllParticlePropagator} module to properly handle such decays 
+(which also required custom handling of pileup). Since this module needed to 
+alter the \texttt{Candidate} class (to store each particle's random, proper 
+lifetime) it is not currently distributed with {\muXmodFull}. This means that 
+{\muXmod} will mildly \emph{over}-estimate the light jet fake rate (once 
+in-flight $\pi^{+}/K^{+}$ decays are turned on), as muons from in-flight decays 
+will arrive at slightly tighter angles to the reconstructed cores of their jets.
 
 While \texttt{AllParticlePropagator} is available on
-GitHub~\cite{Pedersen:myDelphes}, it is not designed for public use (i.e. no
-user guides, just the comments). It may be officially released in the
-future, but we make no guarentees.
+GitHub~\cite{Pedersen:myDelphes}, it is not designed for public use 
+(i.e.\ no user guides, just the comments). It \emph{may} be officially released 
+in the future, but this is not guaranteed.
 
 \subsection{Robust subjet mass}
 
-We define the subjet of a $B$~hadron decay
+The subjet of a $B$~hadron decay is defined as
 %
 \begin{equation}
 \pSubjet=\pCore+\pMu+\pNu,
 \end{equation}
 %
-where the ``core'' is ostensibly a charm hadron. 
-Since the neutrino is not observable, we estimate it using the 
+where the ``core'' is ostensibly a charm hadron.
+Since the neutrino is not observable, we estimate it using the
 simplest choice ($\pNu=\pMu$, since most of the momentum comes from
 their shared boost). This gives us an approximate subjet
 %
@@ -246,22 +249,25 @@ their shared boost). This gives us an approximate subjet
 \end{equation}
 %
 
-The core is found by reclustering the jet using a much smaller radius 
-parameter. This produces a list of \emph{candidate} cores, of which only
-one is the ``correct'' core; this is found by using the hardest muon in 
-the jet to find the core which produces $\sqrt{\pSubjet[2]}$ closest to 
-$\mB=5.3$~GeV (the mass of a $B$~hadron admixture). 
-However, since $\mCore$ is not accurately measured 
-(from the granularity of the Calorimeter), we must first constrain it to its 
-hypothesized mass under the $B$~hadron decay hypothesis ($\mCore=2$~GeV).
+The muon is detected in the muon chamber, and core is found by reclustering the 
+jet using a much smaller radius parameter. This produces a list of 
+\emph{candidate} cores, of which only one is the ``correct'' core (the 
+one which, using only the hardest muon in the jet, produces $\sqrt{\pSubjet[2]}$
+closest to $\mB=5.3$~GeV, the mass of a $B$~hadron admixture). 
+However, the mass of these core candidates is poorly measured (due
+to the the granularity of the Calorimeter), which produces an inaccurate
+value of $\sqrt{\pSubjet[2]}$. To alleviate this problem, $\mCore$ is simply
+constrained to its expected mass, given the $B$~hadron decay hypothesis 
+($\mCore=2$~GeV, the approximate mass of a charm hadron). 
 
-In order to find the core quickly, we don't want to correct the mass 
-of each core candidate before adding the muon. Instead, we can use our
-large cut on muon $\pT$ to treat the muon as massless, then calculate
-the mass of the subjet analytically
+The correct core is found by finding the minimum value of 
+$\left|\sqrt{\pSubjet[2]}-m_B^{}\right|$. In order to complete this search 
+quickly, we don't want to correct the mass of each core candidate before
+adding the muon. Instead, we can use our large cut on muon $\pT$ to treat
+the muon as massless, then calculate the mass of the subjet analytically
 %
 \begin{eqnarray}
-\pSubjet[2] & = & \mCore[2]+2\,\pCore\cdot\pMu \nonumber \\
+\pSubjet[2] & = & \mCore[2]+4\,\pCore\cdot\pMu \nonumber \\
 & = & \mCore[2]+4\,\EMu\ECore(1-\cos(\xi)\sqrt{1-g}),
 \end{eqnarray}
 %
@@ -275,7 +281,7 @@ and $\cos(\xi)=\frac{1}{\sqrt{1+y}}$ (since $\xi<\pi/2$), this becomes
 %
 
 This expression can be optimized to minimize floating point cancellation,
-(which should be miniscule, but mitigating cancellation is a good habit)
+(which should be minuscule, but mitigating cancellation is a good habit)
 %
 \begin{equation}
 \pSubjet[2]=\mCore[2]+4\,\EMu\ECore\frac{g+y}{1+y+\sqrt{1-((g-y)+g\,y)}}.
@@ -284,12 +290,12 @@ This expression can be optimized to minimize floating point cancellation,
 \begin{thebibliography}{}
 
 \bibitem{Pedersen:MuX}
-	K.~Pedersen and Z.~Sullivan,
-	%``The working title''
-	[arXiv:1511.xxxxx [hep-ph]]
+  K.~Pedersen and Z.~Sullivan,
+  %``The working title''
+  [arXiv:1511.xxxxx [hep-ph]]
 
 \bibitem{Pedersen:myDelphes}
-	\url{https://github.com/keith-pedersen/delphes/tree/myDelphes}
+  \url{https://github.com/keith-pedersen/delphes/tree/myDelphes}
 
 \end{thebibliography}
 

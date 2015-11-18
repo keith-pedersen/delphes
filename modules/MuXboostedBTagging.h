@@ -22,8 +22,9 @@
 /** \class MuXboostedBTagging
  *
  *  MuXboostedBTagging tags high-pT heavy flavor jets using a muonic tag
- *  (see arXiv:1511.xxxxx for a full discussion of the underlying physics).
- *  Check for updates @<https://github.com/keith-pedersen/delphes/tree/MuXboostedBTagging>
+ *  --> see [arXiv:1511.xxxxx] for a full discussion of the physics.
+ *  --> see <delphes/doc/MuXboostedBTagging/MuX_UserGuide.pdf> for a quick description of the module
+ *  --> check <https://github.com/keith-pedersen/delphes/tree/MuXboostedBTagging> for updates
  * 
  * 
  *  One of the crucial features of MuXboostedBTagging is that it
@@ -48,23 +49,23 @@
  * 
  * 
  *
- *  The algorithm
+ *  The algorithm synopsis
  * 
  *  1. Clone each jet into the output array, regardless of whether it's tagged.
  * 
  *  2. Look for jets passing a preliminary pT cut (no less than half 
  *     the final cut, since neutrino estimation could potentially 
  *     double a jet's pT)
- *       2a. (ptJet > 0.5*fMinJetPt)
+ *       2a. (ptJet >= 0.5*fMinJetPt)
  * 
  *  3. Look inside the jet for at least one "taggable" muon (muon pT >= fMinMuonPt). 
  *     WARNING: This requires muons to be clustered into jets during 
  *     the initial jet clustering; MuXboostedBTagging does not take a
  *     muon input array.
- *       3a. (ptMu > fMinMuonPt)
+ *       3a. (ptMu >= fMinMuonPt)
  *       3b. After all "taggable" neutrinos are found, ensure that the 
- *           final jet pT (with neutrino estimation) will pass the pT cut 
- *           (ptJet [with neutrinos] > fMinJetPt).
+ *           final jet pT (with neutrino estimation) can possibly pass 
+ *           the pT cut (ptJet [with neutrinos] > fMinJetPt).
  * 
  *  4. Reconstruct the subjet of the semi-leptonic decay
  *       4a. Recluster the jet (discarding towers whose pT ratio, to the 
