@@ -133,7 +133,7 @@ class MuXboostedBTagging: public DelphesModule
       
       // Parameters for subjet reconstruction
       Double_t fMinTowerPtRatio; // Min pT ratio of tower to entire jet, to qualify for reclustering. Helps reduce pileup sensitivity  
-      Double_t fCoreAntiktR; // Reculstering radius
+      Double_t fCoreAntiKtR; // Reculstering radius
       
       Double_t fCoreMinBoost; // Minimum core boost during core selection (keep this low to reduce fake rate)
       Double_t fCoreMinBoostSquared; // Squared version, to prevent redundant math

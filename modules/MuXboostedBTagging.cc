@@ -140,13 +140,13 @@ void MuXboostedBTagging::Init()
    fTaggedBit = 1<<fBitNumber;
 
    fMaxX = GetDouble("MaxX", 3.);
-   fMinCorePtRatio = GetDouble("fMinCorePtRatio", .5);
+   fMinCorePtRatio = GetDouble("MinCorePtRatio", .5);
    
    fMinJetPt = GetDouble("MinJetPt", 300.);
    fMinMuonPt = GetDouble("MinMuonPt", 10.);
 
    fMinTowerPtRatio = GetDouble("MinTowerPtRatio", .05);
-   fCoreAntiktR = GetDouble("CoreAntiktR", .04);
+   fCoreAntiKtR = GetDouble("CoreAntiKtR", .04);
    
    fCoreMinBoost = GetDouble("CoreMinBoost", 1.);
    fCoreMinBoostSquared = Squared(fCoreMinBoost);
@@ -157,16 +157,17 @@ void MuXboostedBTagging::Init()
    fSubjetMassHypothesis = GetDouble("SubjetMassHypothesis", 5.3);
 
    fMaxSubjetMass = GetDouble("MaxSubjetMass", 12.);
+
+	// This only needs to be used if the matriarch/mother code is uncommented
+   //fAllParticles = ImportArray("Delphes/allParticles");
    
-   fAllParticles = ImportArray("Delphes/allParticles");
-   
-   fJetInputArray = ImportArray(GetString("JetInputArray", "FastJetFinder/jets"));
+   fJetInputArray = ImportArray(GetString("JetInputArray", "JetEnergyScale/jets"));
    fItJetInputArray = fJetInputArray->MakeIterator();
    
    fJetOutputArray = ExportArray(GetString("JetOutputArray", "jets"));
    
    // Create the core definition
-   fCoreDefinition = new fastjet::JetDefinition(fastjet::antikt_algorithm, fCoreAntiktR);
+   fCoreDefinition = new fastjet::JetDefinition(fastjet::antikt_algorithm, fCoreAntiKtR);
 }
 
 //------------------------------------------------------------------------------
@@ -397,7 +398,7 @@ void MuXboostedBTagging::Process()
                if(not coreCandidates.empty())
                {
                   fastjet::PseudoJet core;
-                  TLorentzVector p4core;
+                  TLorentzVector p4core, p4neutrinoCorrection;
                   
                   // Get fastjets internal jets (because fastjet only has const access to our input jets,
                   // so they have no internal clustering information, which we'll need to use).
@@ -436,7 +437,7 @@ void MuXboostedBTagging::Process()
                      // subjet mass closest to fSubjetMassHypothesis 
                      // (using only the hardest muon)
                      // 
-                     // Please refer to /delphes/doc/MuXboostedBTagging.pdf/Code notes/1
+                     // Please refer to /delphes/doc/MuXboostedBTagging.pdf/Sec. 3.3
                      // for an explanation of the mass math (i.e. g and y)
 
                      const fastjet::PseudoJet& hardestMuon = reclusterInput[taggableMuons.size()-1];
@@ -506,25 +507,26 @@ void MuXboostedBTagging::Process()
                         // Now add the neutrino to original jet ...
                         // IFF the muon passes the boosted test
                         if(xCore <= fMaxX)
-                           (cloneJet->Momentum) += neutrinoP4;
+                           p4neutrinoCorrection += neutrinoP4;
 
                         minX = std::min(minX, xCore);
                      }// End loop over muons
                      
-                     const Double_t jetPt = (cloneJet->Momentum).Pt();
+                     const Double_t finalJetPt = originalJetPt + p4neutrinoCorrection.Pt();
 
                      // Re-check pt now that we've fully estimated neutrinos
-                     if(jetPt >= fMinJetPt)
+                     if(finalJetPt >= fMinJetPt)
                      {
                         // Ensure we had a boosted muon emission from
                         // inside a subjet which appears to be a b-hadron
                         if((minX <= fMaxX) and 
-                           ((p4core.Pt()/jetPt) >= fMinCorePtRatio))
+                           ((p4core.Pt()/finalJetPt) >= fMinCorePtRatio))
                         {
                            // Tag the original jet
                            originalJet->BTag |= fTaggedBit;
-                           // and the neutrino estimated jet                           
-                           cloneJet->BTag |= fTaggedBit;                           
+                           // Tag the cloned jet, and add the neutrino estimates
+                           cloneJet->BTag |= fTaggedBit;
+									cloneJet->Momentum += p4neutrinoCorrection;
                         }// End tagged
                      }// End final jet pT check
                   }// End subjet reconstruction 
