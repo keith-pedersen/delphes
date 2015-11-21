@@ -22,7 +22,7 @@
 /** \class MuXboostedBTagging
  *
  *  MuXboostedBTagging tags high-pT heavy flavor jets using a muonic tag
- *  --> see [arXiv:1511.xxxxx] for a full discussion of the physics.
+ *  --> see [arXiv:1511.05990] for a full discussion of the physics.
  *  --> see <delphes/doc/MuXboostedBTagging/MuX_UserGuide.pdf> for a quick description of the module
  *  --> check <https://github.com/keith-pedersen/delphes/tree/MuXboostedBTagging> for updates
  * 
