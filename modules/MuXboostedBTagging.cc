@@ -353,6 +353,7 @@ void MuXboostedBTagging::Process()
                for(int iMu = 0; iMu < numMuons; ++iMu)
                {
                   const TLorentzVector& muonMomentum = taggableMuons[iMu]->Momentum;
+                  //PseudoJet (const double px, const double py, const double pz, const double E)  (from the FastJet manual)
                   reclusterInput.emplace_back(muonMomentum.Px(), muonMomentum.Py(), muonMomentum.Pz(), muonMomentum.E());
                   reclusterInput.back().set_user_index(iMu - numMuons);
                }
@@ -376,6 +377,7 @@ void MuXboostedBTagging::Process()
                      continue; // Don't use
                   
                   const TLorentzVector& constituentMomentum = constituent->Momentum;
+                   //PseudoJet (const double px, const double py, const double pz, const double E)  (from the FastJet manual)
                   reclusterInput.emplace_back(constituentMomentum.Px(), constituentMomentum.Py(), constituentMomentum.Pz(), constituentMomentum.E());
                   reclusterInput.back().set_user_index(iEverythingElse);
                }
@@ -442,7 +444,7 @@ void MuXboostedBTagging::Process()
 
                      const fastjet::PseudoJet& hardestMuon = reclusterInput[taggableMuons.size()-1];
                      
-                     Double_t minDeltaMass = 1024.;
+                     Double_t minDeltaMass = 1./0.; // Default to infinity
                      auto itCore = coreCandidates.begin(); // Default to hardest core
 
                      for(auto itCoreCandidate = coreCandidates.begin(); itCoreCandidate not_eq coreCandidates.end(); ++itCoreCandidate)
@@ -495,15 +497,18 @@ void MuXboostedBTagging::Process()
                         
                         // Neutrino estimation
                         // A more sophisticated choice will improve dijet mass resolution
+                        // Remember to remove the reference (&) if you do anything fancier
                         const TLorentzVector& neutrinoP4 = muonP4;
 
-                        // Add the muon and the neutrino
+                        // Add back the muon and the neutrino
                         p4core += muonP4;
                         p4core += neutrinoP4;
                         
                         // Now calcuale x
-                        const Double_t boostMass = std::min(p4core.M(), fMaxSubjetMass);
-                        const Double_t xCore = (p4core.E() * (muonP3.Cross(p4core.Vect())).Mag()) / (muonP3.Dot(p4core.Vect()) * boostMass);
+                        
+                        // Set a hard ceiling on subjet mass, for poor reconstruction
+                        const Double_t subjetMass = std::min(p4core.M(), fMaxSubjetMass);
+                        const Double_t xCore = (p4core.E() * (muonP3.Cross(p4core.Vect())).Mag()) / (muonP3.Dot(p4core.Vect()) * subjetMass);
 
                         // Now add the neutrino to original jet ...
                         // IFF the muon passes the boosted test
