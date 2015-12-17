@@ -102,13 +102,17 @@ module Calorimeter Calorimeter {
 
   set SmearTowerCenter false
 
-  set pi [expr {acos(-1)}]
+  set pi [expr {acos(-1.)}]
 
-  # 1. Automatically sorted because each add commmand goes to a std::map<eta,set<phi>>
+  # How are the eta/phi bins parsed?
+
+  # 1. Automatically sorted because each add command goes to a std::map<eta,set<phi>>
   #    1a. First eta in map is most negative edge of most negative eta bin
   #    1b. Last eta in map is most positive edge of most positive eta bin
   # 2. Each listOfPhi MUST start with -Pi and end with Pi, otherwise angle will be lost
-  # 3. The phi edges of a given bin determined by the eta of its UPPER EDGE
+  
+  # 3. The phi edges of a given tower [eta1, eta2] are determined by 
+  #    the phi edges associated with eta2 (its UPPER ETA EDGE) <===============================
 
   # Here I give the HCAL the same segmentation of the ECAL, to use extra pointing
   # information of the ECAL. This is mostly correct, since the ECAL and HCAL distinction
@@ -119,46 +123,55 @@ module Calorimeter Calorimeter {
   # which infrequently start showering in the ECAL. More importantly, however, it
   # applies the HCAL energy resolution to too small a grid.
 
+  # This automated script creates approximately square towers of a given
+  # SquaredWidth in eta/phi(radians).
+  # It does this by figuring out the closest integer NTowers
+  # that will create the right width. Then it changes SquareWidth to
+  # exactly correspond to NTowers spanning the supplied eta range.
+
+  # Central region, determine width from range [0, AbsEta1]
+  # Create towers spanning [-AbsEta1, AbsEta1]
+
   # .025 x .025 towers
-  # [-3.175 to 3.2]
-  set SquareWidth .025
-  set EtaMin -3.175
-  set EtaMax 3.2
+  # [-3.2 to 3.2]
+  set AbsEta1 3.2
+  set SquareWidth 0.025
 
   set PhiBins {}
   set HalfNumPhiBins [expr {int(round($pi/$SquareWidth))}]
-  for {set i -$HalfNumPhiBins} {$i <= $HalfNumPhiBins} {incr i} {add PhiBins [expr {$i * $pi/$HalfNumPhiBins}] }
+  for {set i -$HalfNumPhiBins} {$i <= $HalfNumPhiBins} {incr i} {add PhiBins [expr {$pi * (double($i)/$HalfNumPhiBins)}]}
 
-  set EtaBins {}
-  set NumEtaBins [expr {int(round(($EtaMax - $EtaMin)/$SquareWidth))}]
-  for {set i 0} {$i <= $NumEtaBins} {incr i} {add EtaBins [expr {$EtaMin + $i * $SquareWidth}] }
+  # The eta for the central towers
+  set HalfNumEtaBins [expr {int(round($AbsEta1/$SquareWidth))}]
+  set SquareWidth [expr {$AbsEta1/$HalfNumEtaBins}]
+  for {set i [expr {-$HalfNumEtaBins + 1}]} {$i <= $HalfNumEtaBins} {incr i} {add EtaBins [expr {$i * $SquareWidth}]}
 
   foreach eta $EtaBins {add EtaPhiBins $eta $PhiBins}
 
-
+  # Forward/Backward region, determine width from range [AbsEta1, AbsEta2]
+  # Create towers spanning [-AbsEta2, -AbsEta1], [AbsEta1, AbsEta2]
+  
   # .1 x .1 towers
-  # [-4.9 to -3.2] && [3.3 to 4.9]
-  set SquareWidth .1
-  set EtaMin -4.9
-  set EtaMax -3.2
-
-  set EtaBins {}
-  set NumEtaBins [expr {int(round(($EtaMax - $EtaMin)/$SquareWidth))}]
-  for {set i 0} {$i <= $NumEtaBins} {incr i} {add EtaBins [expr {$EtaMin + $i * $SquareWidth}] }
-
-  set EtaMin 3.3
-  set EtaMax 4.9
-
-  set NumEtaBins [expr {int(round(($EtaMax - $EtaMin)/$SquareWidth))}]
-  for {set i 0} {$i <= $NumEtaBins} {incr i} {add EtaBins [expr {$EtaMin + $i * $SquareWidth}] }
+  # [-4.9 to -3.2] && [3.2 to 4.9]
+  set AbsEta2 4.9
+  set SquareWidth 0.1
 
   set PhiBins {}
   set HalfNumPhiBins [expr {int(round($pi/$SquareWidth))}]
-  for {set i -$HalfNumPhiBins} {$i <= $HalfNumPhiBins} {incr i} {add PhiBins [expr {$i * $pi/$HalfNumPhiBins}] }
+  for {set i -$HalfNumPhiBins} {$i <= $HalfNumPhiBins} {incr i} {add PhiBins [expr {$pi * (double($i)/$HalfNumPhiBins)}]}
+
+  set EtaBins {}
+  set HalfNumEtaBins [expr {int(round(($AbsEta2-$AbsEta1)/$SquareWidth))}]
+  set SquareWidth [expr {($AbsEta2 - $AbsEta1)/$HalfNumEtaBins}]
+  for {set i -$HalfNumEtaBins} {$i <= 0} {incr i} {add EtaBins [expr {$i * $SquareWidth - $AbsEta1}]}
+  for {set i 1} {$i <= $HalfNumEtaBins} {incr i} {add EtaBins [expr {$i * $SquareWidth + $AbsEta1}]}
 
   foreach eta $EtaBins {add EtaPhiBins $eta $PhiBins}
 
+  # More non-central ranges can be added (or the existing ranges can be changed)
+  # using the previous code as a template
 
+  
 
   # default energy fractions {abs(PDG code)} {Fecal Fhcal}
   # Used primarily by neutral hadrons
