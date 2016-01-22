@@ -44,14 +44,13 @@ endif
 
 #KDP Activate Pythia 8
 PYTHIA8 = ~/MonteCarlo/Pythia
+HAS_PYTHIA8 = true
 
 ifneq ($(PYTHIA8),)
-#HAS_PYTHIA8 = true
 #KDP Add space after -I/-L to convert ~ in $(PYTHIA8) to home directory
 CXXFLAGS += -I $(PYTHIA8)/include
 CXXFLAGS += -I $(PYTHIA8)/include/Pythia8
 OPT_LIBS += -L $(PYTHIA8)/lib -lpythia8 -ldl
-#OPT_LIBS += -L $(PYTHIA8)/lib -lpythia8 -ldl -lboost_iostreams
 endif
 
 DELPHES_LIBS += $(OPT_LIBS)
