@@ -58,7 +58,7 @@ public:
 
   PartonClassifier() {}
   Int_t GetCategory(TObject *object);
-  Double_t fEtaMax, fPTMin;
+  Double_t fEtaMax, fPTMin, fQuarkIDMax;
 };
 
 //------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ Int_t PartonClassifier::GetCategory(TObject *object)
   pdgCode = TMath::Abs(parton->PID);
 
   if(parton->Status == -1) return -1;
-  if(pdgCode != 21 && pdgCode > 5) return -1; // not a parton, skip
+  if(pdgCode != 21 && pdgCode > fQuarkIDMax) return -1; // not a parton, skip
   if(parton->Status == 3 || parton->Status == 2) return 0; // if status 3 return
 
   return 0;
@@ -143,6 +143,7 @@ void JetFlavorAssociation::Init()
 
   fPartonClassifier->fPTMin = GetDouble("PartonPTMin", 0.0);
   fPartonClassifier->fEtaMax = GetDouble("PartonEtaMax", 2.5);
+  fPartonClassifier->fQuarkIDMax = GetInt("QuarkIDMax", 5);
 
   fParticleLHEFClassifier->fPTMin = GetDouble("PartonPTMin", 0.0);
   fParticleLHEFClassifier->fEtaMax = GetDouble("PartonEtaMax", 2.5);
