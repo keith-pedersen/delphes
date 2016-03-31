@@ -26,6 +26,7 @@
  */
 
 #include "modules/HighPtBTagger.h"
+#include "modules/MuXboostedBTagging.h"
 #include "classes/DelphesClasses.h"
 
 #include "TObjArray.h"
@@ -467,10 +468,12 @@ ECalTower::ECalTower(const TLorentzVector& eCalMomentum_in, const Double_t hCalE
 
 //------------------------------------------------------------------------------
 
+/*
 bool SortCandidatePt_Low2High(Candidate const* one, Candidate const* two)
 {
 	return (one->Momentum).Pt() < (two->Momentum).Pt();
 }
+*/
 
 //------------------------------------------------------------------------------
 

@@ -119,7 +119,6 @@
 #pragma link C++ class PixelPicture+;
 #pragma link C++ class LHCOWriterDirect+;
 #pragma link C++ class HighPtBTagger+;
-#pragma link C++ class MuXboostedBTagger+;
 #pragma link C++ class MuXboostedBTagging+;
 
 #endif

@@ -122,6 +122,6 @@ struct ECalTower
 	ECalTower(const TLorentzVector& eCalMomentum_in, const Double_t hCalEnergy_in);
 };
 
-bool SortCandidatePt_Low2High(Candidate const* one, Candidate const* two);
+//bool SortCandidatePt_Low2High(Candidate const* one, Candidate const* two);
 
 #endif
