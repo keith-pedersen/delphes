@@ -58,6 +58,8 @@ private:
 
   Bool_t fUsePTSum;
 
+  Bool_t fDeltaRGeV;
+
   IsolationClassifier *fClassifier; //!
 
   ExRootFilter *fFilter;

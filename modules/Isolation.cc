@@ -108,6 +108,8 @@ void Isolation::Init()
 
   fUsePTSum = GetBool("UsePTSum", false);
 
+  fDeltaRGeV = GetBool("DeltaRGeV", false);
+
   fClassifier->fPTMin = GetDouble("PTMin", 0.5);
 
   // import input array(s)
@@ -172,6 +174,8 @@ void Isolation::Process()
     const TLorentzVector &candidateMomentum = candidate->Momentum;
     eta = TMath::Abs(candidateMomentum.Eta());
 
+    const Double_t fDeltaRcone = fDeltaRGeV ? (fDeltaRMax / candidateMomentum.Pt()) : fDeltaRMax;
+
     // find rho
     rho = 0.0;
     if(fRhoInputArray)
@@ -200,7 +204,7 @@ void Isolation::Process()
     {
       const TLorentzVector &isolationMomentum = isolation->Momentum;
 
-      if(candidateMomentum.DeltaR(isolationMomentum) <= fDeltaRMax &&
+      if(candidateMomentum.DeltaR(isolationMomentum) <= fDeltaRcone &&
          candidate->GetUniqueID() != isolation->GetUniqueID())
       {
         sumAllParticles += isolationMomentum.Pt();
@@ -233,7 +237,7 @@ void Isolation::Process()
 
      // correct sum for pile-up contamination
     sumDBeta = sumCharged + TMath::Max(sumNeutral-0.5*sumChargedPU,0.0);
-    sumRhoCorr = sumCharged + TMath::Max(sumNeutral-TMath::Max(rho,0.0)*fDeltaRMax*fDeltaRMax*TMath::Pi(),0.0);
+    sumRhoCorr = sumCharged + TMath::Max(sumNeutral-TMath::Max(rho,0.0)*fDeltaRcone*fDeltaRcone*TMath::Pi(),0.0);
     ratioDBeta = sumDBeta/candidateMomentum.Pt();
     ratioRhoCorr = sumRhoCorr/candidateMomentum.Pt();
     
