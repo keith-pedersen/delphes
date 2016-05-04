@@ -140,6 +140,7 @@ void JetFlavorAssociation::Init()
   ExRootConfParam param;
 
   fDeltaR = GetDouble("DeltaR", 0.5);
+  fMinPartonEfraction = GetDouble("MinPartonEfraction", 0.1);
 
   fPartonClassifier->fPTMin = GetDouble("PartonPTMin", 0.0);
   fPartonClassifier->fEtaMax = GetDouble("PartonEtaMax", 2.5);
@@ -227,7 +228,7 @@ void JetFlavorAssociation::GetAlgoFlavor(Candidate *jet, TObjArray *partonArray,
   Candidate *parton, *partonLHEF;
   Candidate *tempParton = 0, *tempPartonHighestPt = 0;
   int pdgCode, pdgCodeMax = -1;
-  
+    
   TIter itPartonArray(partonArray);
   TIter itPartonLHEFArray(partonLHEFArray);
 
@@ -237,7 +238,7 @@ void JetFlavorAssociation::GetAlgoFlavor(Candidate *jet, TObjArray *partonArray,
     // default delphes method
     pdgCode = TMath::Abs(parton->PID);
     if(TMath::Abs(parton->PID) == 21) pdgCode = 0;
-    if(jet->Momentum.DeltaR(parton->Momentum) <= fDeltaR)
+    if(((parton->Momentum.E() / jet->Momentum.E()) >= fMinPartonEfraction) and (jet->Momentum.DeltaR(parton->Momentum) <= fDeltaR))
     {
       if(pdgCodeMax < pdgCode) pdgCodeMax = pdgCode;
     }

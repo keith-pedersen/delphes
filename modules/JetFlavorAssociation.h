@@ -55,6 +55,7 @@ public:
 private:
 
   Double_t fDeltaR;
+  Double_t fMinPartonEfraction;
 
   PartonClassifier *fPartonClassifier; //!
   ParticleLHEFClassifier *fParticleLHEFClassifier; //!
