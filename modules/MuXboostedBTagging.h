@@ -127,6 +127,7 @@ class MuXboostedBTagging: public DelphesModule
       //Main tagging parameters
       Double_t fMaxX; // xMax for the tag
       Double_t fMinCorePtRatio; // fMin for the tag
+      Bool_t fUseHardestCore; // true = use the hardest core in the jet, false = search for the core with the mass closest to fCoreMassHypothesis
       
       // pT minimums
       Double_t fMinJetPt;     // Min jet pT to apply for tag

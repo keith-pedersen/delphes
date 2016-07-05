@@ -134,6 +134,7 @@ void MuXboostedBTagging::Init()
 
    fMaxX = GetDouble("MaxX", 3.);
    fMinCorePtRatio = GetDouble("MinCorePtRatio", .5);
+   fUseHardestCore = GetBool("useHardestCore", true);
    
    fMinJetPt = GetDouble("MinJetPt", 300.);
    fMinMuonPt = GetDouble("MinMuonPt", 10.);
@@ -399,7 +400,7 @@ void MuXboostedBTagging::Process()
                {
                   fastjet::PseudoJet core;
                   TLorentzVector p4core, p4neutrinoCorrection;
-                  
+                                    
                   // Get fastjets internal jets (because fastjet only has const access to our input PseudoJets,
                   // so the inputs have no internal clustering information, which we'll need to use).
                   // The first internal PseduoJets are the input PseudoJets, of which the 
@@ -431,10 +432,17 @@ void MuXboostedBTagging::Process()
                      // Sort the core candidates by pT (highest to lowest)
                      coreCandidates = fastjet::sorted_by_pt(coreCandidates);
                   }
-
-                  // Find the core (CHECKED 11.18.2015)
-                  // WARNING: only the hardest muon is used to find the core
+                  
+                  
+                  if(fUseHardestCore)
                   {
+                  	core = coreCandidates.front();
+                  }
+                  else
+                  {
+                  	// Find the core (CHECKED 11.18.2015)
+                  	// WARNING: only the hardest muon is used to find the core
+                  
                      // Here me must find the "correct" core by finding the
                      // subjet mass closest to fSubjetMassHypothesis 
                      // (using only the hardest muon)
@@ -524,7 +532,7 @@ void MuXboostedBTagging::Process()
                      // (CHECKED 11.18.2015)
                      if(finalJetPt >= fMinJetPt)
                      {
-                        // Ensure we had a boosted muon emission from
+               			// Ensure we had a boosted muon emission from
                         // inside a subjet which appears to be a b-hadron
                         if((minX <= fMaxX) and 
                            ((p4core.Pt()/finalJetPt) >= fMinCorePtRatio))
