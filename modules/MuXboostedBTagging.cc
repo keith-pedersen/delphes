@@ -134,7 +134,7 @@ void MuXboostedBTagging::Init()
 
    fMaxX = GetDouble("MaxX", 3.);
    fMinCorePtRatio = GetDouble("MinCorePtRatio", .5);
-   fUseHardestCore = GetBool("useHardestCore", true);
+   fUseHardestCore = GetBool("UseHardestCore", false);
    
    fMinJetPt = GetDouble("MinJetPt", 300.);
    fMinMuonPt = GetDouble("MinMuonPt", 10.);
@@ -464,7 +464,7 @@ void MuXboostedBTagging::Process()
                            const Double_t y = Tan2(*itCoreCandidate, hardestMuon);
 
                            // The core has the mass closest to fSubjetMassHypothesis
-                           const Double_t deltaMass = abs(sqrt(fCoreMassHypothesisSquared + 
+                           const Double_t deltaMass = fabs(sqrt(fCoreMassHypothesisSquared + 
                               (4. * hardestMuon.E() * itCoreCandidate->E() * (g + y)) / (1. + y + sqrt(1. - ((g - y) + g*y)))) - fSubjetMassHypothesis);
 
                            if(deltaMass < minDeltaMass)
